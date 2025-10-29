@@ -1,45 +1,132 @@
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, Map as MapIcon, TrendingUp, Users } from 'lucide-react';
+import { Shield, AlertTriangle, Map as MapIcon, TrendingUp, Users, Bell, Clock, MapPin } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
+
+// Mock data for latest alerts
+const mockLatestAlerts = [
+  {
+    id: 1,
+    type: 'Theft',
+    location: 'Johannesburg CBD',
+    time: '2 hours ago',
+    description: 'Vehicle break-in reported near Main Street'
+  },
+  {
+    id: 2,
+    type: 'Suspicious Activity',
+    location: 'Cape Town Central',
+    time: '5 hours ago',
+    description: 'Unusual activity reported in the area'
+  },
+  {
+    id: 3,
+    type: 'Robbery',
+    location: 'Durban North',
+    time: '8 hours ago',
+    description: 'Incident reported and verified by community'
+  }
+];
 
 function Home() {
   const { currentUser } = useAuth();
+  const username = currentUser?.username || currentUser?.displayName || 'User';
 
   return (
     <div className="page">
-      {/* Hero Section */}
-      <div className="text-center mb-12">
-        <div className="flex-center mb-4">
-          <div className="icon-wrapper icon-wrapper-green">
-            <Shield className="w-16 h-16" />
+      {/* Welcome Card */}
+      <div className="card glassy-card mb-8">
+        <div className="flex flex-items-center mb-4">
+          <div className="icon-wrapper icon-wrapper-primary mr-4">
+            <Shield className="w-10 h-10" />
+          </div>
+          <div>
+            <h1>Welcome back, {username}!</h1>
+            <p className="text-gray-600">Stay informed about your community's safety</p>
           </div>
         </div>
-        <h1>Welcome to SafeMzansi</h1>
-        <p className="text-xl text-gray-600 mb-8">
-          Stay Informed. Stay Safe. Stay Mzansi.
-        </p>
-        <div className="flex flex-col sm:flex-row flex-gap justify-center">
-          <Link
-            to="/map"
-            className="btn btn-primary"
-          >
+        <div className="flex flex-col sm:flex-row flex-gap">
+          <Link to="/map" className="btn btn-primary">
             <MapIcon className="w-5 h-5" />
             View Crime Map
           </Link>
-          <Link
-            to="/report"
-            className="btn btn-secondary"
-          >
+          <Link to="/report" className="btn btn-secondary">
             <AlertTriangle className="w-5 h-5" />
             Report Crime
+          </Link>
+          <Link to="/alerts" className="btn btn-outline">
+            <Bell className="w-5 h-5" />
+            View Alerts
           </Link>
         </div>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid grid-3 mb-8">
+        <div className="card glassy-card">
+          <div className="flex flex-items-center flex-between">
+            <div>
+              <p className="text-gray-600 mb-1">Reports Today</p>
+              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>1,234</div>
+            </div>
+            <div className="icon-wrapper icon-wrapper-primary">
+              <TrendingUp className="w-8 h-8" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card glassy-card">
+          <div className="flex flex-items-center flex-between">
+            <div>
+              <p className="text-gray-600 mb-1">Active Users</p>
+              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>5,678</div>
+            </div>
+            <div className="icon-wrapper icon-wrapper-cyan">
+              <Users className="w-8 h-8" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card glassy-card">
+          <div className="flex flex-items-center flex-between">
+            <div>
+              <p className="text-gray-600 mb-1">Verified Reports</p>
+              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>89%</div>
+            </div>
+            <div className="icon-wrapper icon-wrapper-primary">
+              <Shield className="w-8 h-8" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Latest Alerts */}
+      <div className="mb-8">
+        <div className="flex flex-items-center mb-4">
+          <Bell className="w-6 h-6 mr-2" style={{ color: 'var(--primary-blue)' }} />
+          <h2>Latest Alerts</h2>
+        </div>
+        <div className="grid grid-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {mockLatestAlerts.map((alert) => (
+            <div key={alert.id} className="card glassy-card">
+              <div className="flex flex-items-center flex-between mb-3">
+                <span className="badge badge-danger">{alert.type}</span>
+                <span className="text-xs text-gray-500">{alert.time}</span>
+              </div>
+              <h3 className="mb-2">{alert.type}</h3>
+              <p className="text-sm text-gray-600 mb-3">{alert.description}</p>
+              <div className="flex flex-items-center text-xs text-gray-500">
+                <MapPin className="w-4 h-4 mr-1" />
+                <span>{alert.location}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Features Grid */}
-      <div className="grid grid-3 mb-12">
-        <div className="card">
-          <div className="icon-wrapper icon-wrapper-green mb-4">
+      <div className="grid grid-3">
+        <div className="card glassy-card">
+          <div className="icon-wrapper icon-wrapper-primary mb-4">
             <Shield className="w-8 h-8" />
           </div>
           <h3 className="mb-2">Real-Time Alerts</h3>
@@ -48,8 +135,8 @@ function Home() {
           </p>
         </div>
 
-        <div className="card">
-          <div className="icon-wrapper icon-wrapper-gold mb-4">
+        <div className="card glassy-card">
+          <div className="icon-wrapper icon-wrapper-cyan mb-4">
             <MapIcon className="w-8 h-8" />
           </div>
           <h3 className="mb-2">Interactive Map</h3>
@@ -58,8 +145,8 @@ function Home() {
           </p>
         </div>
 
-        <div className="card">
-          <div className="icon-wrapper icon-wrapper-green mb-4">
+        <div className="card glassy-card">
+          <div className="icon-wrapper icon-wrapper-primary mb-4">
             <Users className="w-8 h-8" />
           </div>
           <h3 className="mb-2">Community Verified</h3>
@@ -68,74 +155,6 @@ function Home() {
           </p>
         </div>
       </div>
-
-      {/* Stats Section */}
-      <div className="card bg-primary text-white mb-12" style={{ backgroundColor: 'var(--primary-green)', color: 'white' }}>
-        <div className="grid grid-3">
-          <div className="stat-card">
-            <TrendingUp className="w-12 h-12 mx-auto mb-2" />
-            <div className="stat-number">1,234</div>
-            <div className="stat-label">Reports Today</div>
-          </div>
-          <div className="stat-card">
-            <Users className="w-12 h-12 mx-auto mb-2" />
-            <div className="stat-number">5,678</div>
-            <div className="stat-label">Active Users</div>
-          </div>
-          <div className="stat-card">
-            <Shield className="w-12 h-12 mx-auto mb-2" />
-            <div className="stat-number">89%</div>
-            <div className="stat-label">Verified Reports</div>
-          </div>
-        </div>
-      </div>
-
-      {/* How It Works */}
-      <div className="mb-12">
-        <h2 className="text-center mb-8">How It Works</h2>
-        <div className="grid grid-4">
-          <div className="text-center">
-            <div className="icon-wrapper icon-wrapper-green mx-auto mb-4">
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>1</span>
-            </div>
-            <h4 className="mb-2">Sign Up</h4>
-            <p className="text-gray-600">Create your account for free</p>
-          </div>
-          <div className="text-center">
-            <div className="icon-wrapper icon-wrapper-green mx-auto mb-4">
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>2</span>
-            </div>
-            <h4 className="mb-2">Report or View</h4>
-            <p className="text-gray-600">Share incidents or check the map</p>
-          </div>
-          <div className="text-center">
-            <div className="icon-wrapper icon-wrapper-green mx-auto mb-4">
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>3</span>
-            </div>
-            <h4 className="mb-2">Get Alerts</h4>
-            <p className="text-gray-600">Receive real-time safety alerts</p>
-          </div>
-          <div className="text-center">
-            <div className="icon-wrapper icon-wrapper-green mx-auto mb-4">
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>4</span>
-            </div>
-            <h4 className="mb-2">Stay Safe</h4>
-            <p className="text-gray-600">Make informed decisions</p>
-          </div>
-        </div>
-      </div>
-
-      {!currentUser && (
-        <div className="card text-center">
-          <h2 className="mb-4">Get Started Today</h2>
-          <p className="text-gray-600 mb-6">
-            Join thousands of South Africans keeping each other safe.
-          </p>
-          <Link to="/profile" className="btn btn-primary btn-full-width">
-            Sign Up Now
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

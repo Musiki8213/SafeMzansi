@@ -1,8 +1,51 @@
-import { useState, useEffect, useRef } from 'react';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { Loader } from '@googlemaps/js-api-loader';
-import { Filter, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Filter, CheckCircle, MapPin, Clock } from 'lucide-react';
+
+const REPORTS_STORAGE_KEY = 'safemzansi_reports';
+
+// Default mock hotspots for demo
+const defaultHotspots = [
+  {
+    id: 1,
+    type: 'Theft',
+    location: 'Johannesburg CBD',
+    lat: -26.2041,
+    lng: 28.0473,
+    count: 12,
+    lastReport: '2 hours ago',
+    verified: true
+  },
+  {
+    id: 2,
+    type: 'Robbery',
+    location: 'Cape Town Central',
+    lat: -33.9249,
+    lng: 18.4241,
+    count: 8,
+    lastReport: '5 hours ago',
+    verified: true
+  },
+  {
+    id: 3,
+    type: 'Vandalism',
+    location: 'Durban North',
+    lat: -29.8386,
+    lng: 31.0292,
+    count: 5,
+    lastReport: '1 day ago',
+    verified: false
+  },
+  {
+    id: 4,
+    type: 'Suspicious Activity',
+    location: 'Pretoria East',
+    lat: -25.7479,
+    lng: 28.2293,
+    count: 3,
+    lastReport: '2 days ago',
+    verified: true
+  }
+];
 
 const crimeTypeColors = {
   Theft: '#FF6B6B',
@@ -16,123 +59,111 @@ const crimeTypeColors = {
 };
 
 function Map() {
-  const mapRef = useRef(null);
-  const [reports, setReports] = useState([]);
-  const [filteredReports, setFilteredReports] = useState([]);
   const [selectedType, setSelectedType] = useState('');
   const [showVerified, setShowVerified] = useState(true);
-  const mapInstanceRef = useRef(null);
-  const markersRef = useRef([]);
+  const [hotspots, setHotspots] = useState(defaultHotspots);
 
   useEffect(() => {
-    // Load Google Maps
-    const loader = new Loader({
-      apiKey: 'YOUR_GOOGLE_MAPS_API_KEY', // Replace with your actual API key
-      version: 'weekly',
-      libraries: ['maps', 'marker']
-    });
-
-    loader.load().then(() => {
-      // Initialize map centered on South Africa
-      if (mapRef.current) {
-        const map = new google.maps.Map(mapRef.current, {
-          center: { lat: -25.7, lng: 28.2 },
-          zoom: 6,
-          mapTypeControl: false,
-          streetViewControl: false
-        });
-        mapInstanceRef.current = map;
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    // Listen to reports
-    const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const reportsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setReports(reportsData);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    // Filter reports
-    let filtered = reports;
+    // Load reports from localStorage and convert to hotspots
+    const allReports = JSON.parse(localStorage.getItem(REPORTS_STORAGE_KEY) || '[]');
     
-    if (selectedType) {
-      filtered = filtered.filter(r => r.type === selectedType);
-    }
-    
-    if (showVerified) {
-      filtered = filtered.filter(r => r.verified === true);
-    }
-
-    setFilteredReports(filtered);
-  }, [reports, selectedType, showVerified]);
-
-  useEffect(() => {
-    // Update markers on map
-    if (!mapInstanceRef.current || filteredReports.length === 0) return;
-
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.setMap(null));
-    markersRef.current = [];
-
-    // Add new markers
-    filteredReports.forEach((report) => {
-      const marker = new google.maps.Marker({
-        position: { lat: report.lat, lng: report.lng },
-        map: mapInstanceRef.current,
-        title: report.type,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          fillColor: crimeTypeColors[report.type] || '#6B7280',
-          fillOpacity: 1,
-          strokeColor: '#FFF',
-          strokeWeight: 2,
-          scale: 8
+    if (allReports.length > 0) {
+      // Group reports by location/area and create hotspots
+      const locationGroups = {};
+      allReports.forEach(report => {
+        const locationKey = `${report.lat?.toFixed(1)}_${report.lng?.toFixed(1)}`;
+        if (!locationGroups[locationKey]) {
+          locationGroups[locationKey] = {
+            location: `Area ${Object.keys(locationGroups).length + 1}`,
+            lat: report.lat,
+            lng: report.lng,
+            type: report.type,
+            reports: []
+          };
         }
+        locationGroups[locationKey].reports.push(report);
       });
 
-      // Info window
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 8px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: bold;">${report.type}</h3>
-            <p style="margin: 0 0 8px 0;">${report.description}</p>
-            ${report.verified ? '<p style="color: green; margin: 0;"><strong>✓ Verified</strong></p>' : ''}
-            <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">
-              ${new Date(report.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-        `
-      });
+      const newHotspots = Object.values(locationGroups).map((group, idx) => ({
+        id: `hotspot_${idx}`,
+        type: group.type,
+        location: group.location,
+        lat: group.lat,
+        lng: group.lng,
+        count: group.reports.length,
+        lastReport: getTimeAgo(group.reports[0]?.createdAt),
+        verified: group.reports.some(r => r.verified)
+      }));
 
-      marker.addListener('click', () => {
-        infoWindow.open(mapInstanceRef.current, marker);
-      });
+      setHotspots([...defaultHotspots, ...newHotspots]);
+    }
+  }, []);
 
-      markersRef.current.push(marker);
-    });
-  }, [filteredReports]);
+  function getTimeAgo(dateString) {
+    if (!dateString) return 'Recently';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-  const uniqueTypes = [...new Set(reports.map(r => r.type))];
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    return `${diffDays} days ago`;
+  }
+
+  const filteredHotspots = hotspots.filter(hotspot => {
+    if (selectedType && hotspot.type !== selectedType) return false;
+    if (showVerified && !hotspot.verified) return false;
+    return true;
+  });
+
+  const uniqueTypes = [...new Set(hotspots.map(h => h.type))];
 
   return (
-    <div className="flex" style={{ height: '100vh' }}>
-      {/* Filters Sidebar */}
-      <div className="sidebar" style={{ position: 'relative', display: 'block', width: '20rem', border: 'none', padding: '1.5rem', overflowY: 'auto' }}>
-        <div className="mb-6">
-          <h2 className="mb-4">Crime Map</h2>
-          <div>
-            <div className="form-group">
+    <div className="map-page">
+      {/* Map Container */}
+      <div className="map-container">
+        {/* Static Map Image/Placeholder */}
+        <div className="map-placeholder">
+          <div className="map-overlay-content">
+            <MapPin className="w-16 h-16" style={{ color: 'var(--primary-blue)' }} />
+            <h2>Interactive Crime Map</h2>
+            <p className="text-gray-600">South Africa Crime Hotspots</p>
+          </div>
+          {/* Mock map markers */}
+          <div className="map-markers">
+            {filteredHotspots.map((hotspot, index) => {
+              // Convert lat/lng to approximate pixel positions for South Africa map
+              // South Africa approximate bounds: lat -35 to -22, lng 16 to 33
+              const latPercent = ((hotspot.lat + 35) / 13) * 100; // Normalize to 0-100
+              const lngPercent = ((hotspot.lng - 16) / 17) * 100; // Normalize to 0-100
+              
+              return (
+                <div
+                  key={hotspot.id}
+                  className="map-marker"
+                  style={{
+                    left: `${Math.max(5, Math.min(95, lngPercent))}%`,
+                    top: `${Math.max(5, Math.min(95, 100 - latPercent))}%`, // Invert Y axis
+                    backgroundColor: crimeTypeColors[hotspot.type] || '#6B7280'
+                  }}
+                  title={`${hotspot.location} - ${hotspot.type}`}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Glassy Overlay Panel */}
+        <div className="map-overlay-panel glassy-overlay">
+          <div className="overlay-header">
+            <h2 className="mb-4">Crime Hotspots</h2>
+            
+            <div className="form-group mb-4">
               <label className="form-label">
-                <Filter className="w-4 h-4 inline mr-2" />
+                <Filter className="w-4 h-4" />
                 Filter by Type
               </label>
               <select
@@ -147,7 +178,7 @@ function Map() {
               </select>
             </div>
 
-            <div className="flex flex-items-center flex-gap-sm mt-4">
+            <div className="flex flex-items-center flex-gap-sm mb-4">
               <input
                 type="checkbox"
                 id="verified"
@@ -159,77 +190,42 @@ function Map() {
               </label>
             </div>
 
-            <div className="mt-4">
-              <h4 className="mb-2">Legend</h4>
-              <div>
-                {Object.entries(crimeTypeColors).map(([type, color]) => (
-                  <div key={type} className="flex flex-items-center flex-gap-sm mb-2">
-                    <div
-                      style={{ width: '1rem', height: '1rem', borderRadius: '50%', backgroundColor: color }}
-                    />
-                    <span className="text-sm">{type}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t">
+            <div className="hotspot-count mb-4">
               <p className="text-sm text-gray-600">
-                <strong>{filteredReports.length}</strong> reports showing
+                <strong>{filteredHotspots.length}</strong> hotspots showing
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Report List */}
-        <div style={{ maxHeight: '24rem', overflowY: 'auto' }}>
-          {filteredReports.map((report) => (
-            <div
-              key={report.id}
-              className="card"
-              style={{ marginBottom: '0.5rem', cursor: 'pointer' }}
-              onClick={() => {
-                const marker = markersRef.current.find(m => 
-                  m.position.lat() === report.lat && m.position.lng() === report.lng
-                );
-                if (marker) {
-                  new google.maps.InfoWindow({
-                    content: `
-                      <div style="padding: 8px;">
-                        <h3 style="margin: 0 0 8px 0; font-weight: bold;">${report.type}</h3>
-                        <p style="margin: 0 0 8px 0;">${report.description}</p>
-                      </div>
-                    `
-                  }).open(mapInstanceRef.current, marker);
-                }
-              }}
-            >
-              <div className="flex flex-items-center flex-between">
-                <div>
-                  <div className="flex flex-items-center flex-gap-sm mb-2">
-                    <span className="font-medium">{report.type}</span>
-                    {report.verified && (
-                      <CheckCircle className="w-4 h-4" style={{ color: 'green' }} />
+          {/* Hotspots List */}
+          <div className="hotspots-list">
+            {filteredHotspots.map((hotspot) => (
+              <div key={hotspot.id} className="hotspot-card">
+                <div className="flex flex-items-center flex-between mb-2">
+                  <div className="flex flex-items-center flex-gap-sm">
+                    <div
+                      className="hotspot-indicator"
+                      style={{ backgroundColor: crimeTypeColors[hotspot.type] || '#6B7280' }}
+                    />
+                    <span className="font-medium">{hotspot.type}</span>
+                    {hotspot.verified && (
+                      <CheckCircle className="w-4 h-4" style={{ color: '#10B981' }} />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600" style={{ 
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {report.description}
-                  </p>
+                  <span className="badge badge-primary">{hotspot.count}</span>
                 </div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <MapPin className="w-4 h-4 inline mr-1" />
+                  {hotspot.location}
+                </p>
+                <p className="text-xs text-gray-500">
+                  <Clock className="w-3 h-3 inline mr-1" />
+                  Last report: {hotspot.lastReport}
+                </p>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Map */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
   );

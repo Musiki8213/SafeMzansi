@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { collection, addDoc, GeoPoint } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { useAuth } from '../firebase/authContext';
 import toast from 'react-hot-toast';
 import { AlertTriangle, MapPin, Camera } from 'lucide-react';
@@ -15,6 +13,8 @@ const crimeTypes = [
   'Domestic Violence',
   'Other'
 ];
+
+const REPORTS_STORAGE_KEY = 'safemzansi_reports';
 
 function ReportCrime() {
   const { currentUser } = useAuth();
@@ -73,19 +73,28 @@ function ReportCrime() {
     setLoading(true);
     
     try {
-      await addDoc(collection(db, 'reports'), {
+      // Get existing reports from localStorage
+      const existingReports = JSON.parse(localStorage.getItem(REPORTS_STORAGE_KEY) || '[]');
+      
+      // Create new report
+      const newReport = {
+        id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: formData.type,
         description: formData.description,
-        location: new GeoPoint(formData.lat, formData.lng),
         lat: formData.lat,
         lng: formData.lng,
         photoURL: formData.photoURL,
         userId: currentUser.uid,
+        username: currentUser.username || currentUser.displayName,
         verified: false,
         likes: 0,
         dislikes: 0,
         createdAt: new Date().toISOString()
-      });
+      };
+
+      // Save to localStorage
+      existingReports.push(newReport);
+      localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(existingReports));
 
       toast.success('Crime report submitted successfully!');
       setFormData({
@@ -105,10 +114,10 @@ function ReportCrime() {
 
   return (
     <div className="page container">
-      <div className="card">
+      <div className="card glassy-card">
         <div className="flex flex-items-center mb-6">
-          <div className="icon-wrapper icon-wrapper-gray mr-4">
-            <AlertTriangle className="w-8 h-8" style={{ color: 'var(--accent-gold)' }} />
+          <div className="icon-wrapper icon-wrapper-cyan mr-4">
+            <AlertTriangle className="w-8 h-8" />
           </div>
           <div>
             <h1>Report Crime</h1>

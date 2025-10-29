@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Map, AlertTriangle, User, Home as HomeIcon } from 'lucide-react';
+import { Shield, Map, AlertTriangle, User, Home as HomeIcon, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
 
 function Layout({ children }) {
@@ -7,7 +7,7 @@ function Layout({ children }) {
   const { currentUser } = useAuth();
 
   const navItems = [
-    { path: '/', icon: HomeIcon, label: 'Home' },
+    { path: '/home', icon: HomeIcon, label: 'Home' },
     { path: '/map', icon: Map, label: 'Map' },
     { path: '/report', icon: AlertTriangle, label: 'Report' },
     { path: '/alerts', icon: Shield, label: 'Alerts' },
@@ -26,17 +26,59 @@ function Layout({ children }) {
               <p>Stay Informed. Stay Safe.</p>
             </div>
           </div>
-          {currentUser && (
-            <div className="navbar-auth">
-              <span>{currentUser.email}</span>
-            </div>
-          )}
+          <div className="navbar-auth">
+            {currentUser ? (
+              <div className="navbar-username">
+                <span className="username-text">
+                  {currentUser.username || currentUser.displayName || 'User'}
+                </span>
+              </div>
+            ) : (
+              <div className="navbar-auth-buttons">
+                <Link to="/login" className="btn btn-outline" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>
+                  <LogIn className="w-4 h-4" />
+                  Sign In
+                </Link>
+                <Link to="/signup" className="btn" style={{ background: 'white', color: 'var(--primary-blue)', marginLeft: '0.5rem' }}>
+                  <UserPlus className="w-4 h-4" />
+                  Sign Up
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
-      {/* Desktop Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-nav">
+      {/* Desktop Sidebar - Only show when authenticated */}
+      {currentUser && (
+        <aside className="sidebar">
+          <div className="sidebar-nav">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`nav-link ${isActive ? 'active' : ''}`}
+                >
+                  <Icon className="nav-link-icon" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </aside>
+      )}
+
+      {/* Main Content */}
+      <main className={`main-content ${!currentUser ? 'main-content-no-sidebar' : ''}`}>
+        {children}
+      </main>
+
+      {/* Bottom Navigation (Mobile) - Only show when authenticated */}
+      {currentUser && (
+        <nav className="bottom-nav">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -44,38 +86,15 @@ function Layout({ children }) {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`nav-link ${isActive ? 'active' : ''}`}
+                className={`bottom-nav-item ${isActive ? 'active' : ''}`}
               >
-                <Icon className="nav-link-icon" />
-                <span>{item.label}</span>
+                <Icon className="bottom-nav-icon" />
+                <span className="bottom-nav-label">{item.label}</span>
               </Link>
             );
           })}
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        {children}
-      </main>
-
-      {/* Bottom Navigation (Mobile) */}
-      <nav className="bottom-nav">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`bottom-nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Icon className="bottom-nav-icon" />
-              <span className="bottom-nav-label">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+        </nav>
+      )}
 
       {/* Footer */}
       <footer className="footer">
@@ -101,7 +120,7 @@ function Layout({ children }) {
             </div>
           </div>
           <div className="footer-copyright">
-            <p>&copy; 2024 SafeMzansi. All rights reserved.</p>
+            <p>&copy; 2025 SafeMzansi. All rights reserved.</p>
           </div>
         </div>
       </footer>
