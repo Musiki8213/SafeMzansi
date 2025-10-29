@@ -104,27 +104,27 @@ function ReportCrime() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="page container">
       <div className="card">
-        <div className="flex items-center mb-6">
-          <div className="bg-red-100 p-3 rounded-lg mr-4">
-            <AlertTriangle className="w-8 h-8 text-red-600" />
+        <div className="flex flex-items-center mb-6">
+          <div className="icon-wrapper icon-wrapper-gray mr-4">
+            <AlertTriangle className="w-8 h-8" style={{ color: 'var(--accent-gold)' }} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Report Crime</h1>
+            <h1>Report Crime</h1>
             <p className="text-gray-600">Help keep your community safe</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">
               Crime Type *
             </label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-safe-green focus:border-transparent"
+              className="form-select"
               required
             >
               <option value="">Select a crime type</option>
@@ -136,57 +136,58 @@ function ReportCrime() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="form-group">
+            <label className="form-label">
               Description *
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-safe-green focus:border-transparent"
+              className="form-textarea"
               placeholder="Describe what you witnessed..."
               required
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="form-group">
+            <label className="form-label">
               Location *
             </label>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-items-center flex-gap">
               <button
                 type="button"
                 onClick={getCurrentLocation}
                 disabled={gettingLocation}
-                className="btn btn-secondary inline-flex items-center"
+                className="btn btn-secondary"
               >
-                <MapPin className="w-5 h-5 mr-2" />
+                <MapPin className="w-5 h-5" />
                 {gettingLocation ? 'Getting Location...' : 'Use My Location'}
               </button>
               {formData.lat && formData.lng && (
-                <span className="text-sm text-green-600">
+                <span className="badge badge-success">
                   ✓ Location captured
                 </span>
               )}
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="form-group">
+            <label className="form-label">
               Photo (Optional)
             </label>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-items-center flex-gap">
               <input
                 type="url"
                 value={formData.photoURL}
                 onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-safe-green focus:border-transparent"
+                className="form-input"
+                style={{ flex: 1 }}
                 placeholder="Photo URL (or upload)"
               />
               <button
                 type="button"
-                className="btn bg-gray-100 text-gray-700 inline-flex items-center"
+                className="btn btn-outline"
               >
                 <Camera className="w-5 h-5" />
               </button>
@@ -196,7 +197,7 @@ function ReportCrime() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full btn btn-primary"
+            className="btn btn-primary btn-full-width"
           >
             {loading ? 'Submitting...' : 'Submit Report'}
           </button>
@@ -207,4 +208,3 @@ function ReportCrime() {
 }
 
 export default ReportCrime;
-

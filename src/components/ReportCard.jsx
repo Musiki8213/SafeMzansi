@@ -88,46 +88,38 @@ function ReportCard({ report }) {
   };
 
   return (
-    <div className="card hover:shadow-lg transition-shadow">
-      <div className="flex items-start justify-between mb-3">
+    <div className="card">
+      <div className="flex flex-items-center flex-between mb-3">
         <div>
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="inline-block px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+          <div className="flex flex-items-center flex-gap-sm mb-2">
+            <span className="badge badge-danger">
               {report.type}
             </span>
             {isVerified && (
-              <span className="inline-flex items-center text-sm text-green-600">
-                <CheckCircle className="w-4 h-4 mr-1" />
+              <span className="badge badge-success flex flex-items-center flex-gap-sm">
+                <CheckCircle className="w-4 h-4" />
                 Verified
               </span>
             )}
           </div>
-          <h3 className="text-lg font-bold mb-2">{report.type}</h3>
+          <h3 className="text-xl font-bold mb-2">{report.type}</h3>
         </div>
       </div>
 
-      <p className="text-gray-700 mb-4">{report.description}</p>
+      <p className="text-gray-600 mb-4">{report.description}</p>
 
-      <div className="flex items-center justify-between pt-4 border-t">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-items-center flex-between pt-4" style={{ borderTop: '1px solid var(--border-gray)' }}>
+        <div className="flex flex-items-center flex-gap">
           <button
             onClick={() => handleVote('up')}
-            className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors ${
-              userVote === 'up'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-green-100'
-            }`}
+            className={`style-btn-vote ${userVote === 'up' ? 'style-btn-vote-active' : 'style-btn-vote-inactive'}`}
           >
             <ThumbsUp className="w-4 h-4" />
             <span>{likes}</span>
           </button>
           <button
             onClick={() => handleVote('down')}
-            className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors ${
-              userVote === 'down'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-red-100'
-            }`}
+            className={`style-btn-vote ${userVote === 'down' ? 'style-btn-dislike-active' : 'style-btn-vote-inactive'}`}
           >
             <ThumbsDown className="w-4 h-4" />
             <span>{dislikes}</span>
@@ -142,4 +134,3 @@ function ReportCard({ report }) {
 }
 
 export default ReportCard;
-

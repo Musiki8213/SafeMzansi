@@ -124,21 +124,21 @@ function Map() {
   const uniqueTypes = [...new Set(reports.map(r => r.type))];
 
   return (
-    <div className="h-screen flex">
+    <div className="flex" style={{ height: '100vh' }}>
       {/* Filters Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 p-6 overflow-y-auto">
+      <div className="sidebar" style={{ position: 'relative', display: 'block', width: '20rem', border: 'none', padding: '1.5rem', overflowY: 'auto' }}>
         <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-4">Crime Map</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <h2 className="mb-4">Crime Map</h2>
+          <div>
+            <div className="form-group">
+              <label className="form-label">
                 <Filter className="w-4 h-4 inline mr-2" />
                 Filter by Type
               </label>
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                className="form-select"
               >
                 <option value="">All Types</option>
                 {uniqueTypes.map(type => (
@@ -147,27 +147,25 @@ function Map() {
               </select>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-items-center flex-gap-sm mt-4">
               <input
                 type="checkbox"
                 id="verified"
                 checked={showVerified}
                 onChange={(e) => setShowVerified(e.target.checked)}
-                className="rounded"
               />
-              <label htmlFor="verified" className="text-sm text-gray-700">
+              <label htmlFor="verified" className="form-label" style={{ margin: 0 }}>
                 Show verified only
               </label>
             </div>
 
             <div className="mt-4">
-              <h4 className="font-medium mb-2">Legend</h4>
-              <div className="space-y-2">
+              <h4 className="mb-2">Legend</h4>
+              <div>
                 {Object.entries(crimeTypeColors).map(([type, color]) => (
-                  <div key={type} className="flex items-center space-x-2">
+                  <div key={type} className="flex flex-items-center flex-gap-sm mb-2">
                     <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: color }}
+                      style={{ width: '1rem', height: '1rem', borderRadius: '50%', backgroundColor: color }}
                     />
                     <span className="text-sm">{type}</span>
                   </div>
@@ -184,11 +182,12 @@ function Map() {
         </div>
 
         {/* Report List */}
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div style={{ maxHeight: '24rem', overflowY: 'auto' }}>
           {filteredReports.map((report) => (
             <div
               key={report.id}
-              className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
+              className="card"
+              style={{ marginBottom: '0.5rem', cursor: 'pointer' }}
               onClick={() => {
                 const marker = markersRef.current.find(m => 
                   m.position.lat() === report.lat && m.position.lng() === report.lng
@@ -205,15 +204,20 @@ function Map() {
                 }
               }}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
+              <div className="flex flex-items-center flex-between">
+                <div>
+                  <div className="flex flex-items-center flex-gap-sm mb-2">
                     <span className="font-medium">{report.type}</span>
                     {report.verified && (
-                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <CheckCircle className="w-4 h-4" style={{ color: 'green' }} />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                  <p className="text-sm text-gray-600" style={{ 
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}>
                     {report.description}
                   </p>
                 </div>
@@ -224,12 +228,11 @@ function Map() {
       </div>
 
       {/* Map */}
-      <div className="flex-1 relative">
-        <div ref={mapRef} className="w-full h-full" />
+      <div style={{ flex: 1, position: 'relative' }}>
+        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
   );
 }
 
 export default Map;
-

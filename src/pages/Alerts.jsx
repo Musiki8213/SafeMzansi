@@ -68,10 +68,10 @@ function Alerts() {
 
   if (!currentUser) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="page container">
         <div className="card text-center">
-          <Bell className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">Sign In Required</h2>
+          <Bell className="w-16 h-16" style={{ color: '#999', margin: '0 auto 1rem' }} />
+          <h2 className="mb-4">Sign In Required</h2>
           <p className="text-gray-600">
             Please sign in to view personalized safety alerts
           </p>
@@ -81,52 +81,54 @@ function Alerts() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-8">
-        <div className="bg-safe-gold p-3 rounded-lg mr-4">
-          <Bell className="w-8 h-8 text-black" />
+    <div className="page container">
+      <div className="flex flex-items-center mb-8">
+        <div className="icon-wrapper icon-wrapper-gold mr-4">
+          <Bell className="w-8 h-8" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold">Safety Alerts</h1>
+          <h1>Safety Alerts</h1>
           <p className="text-gray-600">Nearby verified incidents</p>
         </div>
       </div>
 
       {alerts.length === 0 ? (
-        <div className="card text-center py-12">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold mb-2">All Clear!</h3>
+        <div className="card text-center" style={{ padding: '3rem' }}>
+          <CheckCircle className="w-16 h-16" style={{ color: '#10B981', margin: '0 auto 1rem' }} />
+          <h3 className="mb-2">All Clear!</h3>
           <p className="text-gray-600">
             No recent alerts in your area. Stay safe!
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div>
           {alerts.map((alert) => (
-            <div key={alert.id} className="card hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="inline-block px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+            <div key={alert.id} className="card">
+              <div className="flex flex-between mb-3">
+                <div>
+                  <div className="flex flex-items-center flex-gap-sm mb-2">
+                    <span className="badge badge-danger">
                       {alert.type}
                     </span>
                     {alert.verified && (
-                      <span className="inline-flex items-center text-sm text-green-600">
-                        <CheckCircle className="w-4 h-4 mr-1" />
+                      <span className="badge badge-success flex flex-items-center flex-gap-sm">
+                        <CheckCircle className="w-4 h-4" />
                         Verified
                       </span>
                     )}
                   </div>
-                  <h3 className="text-lg font-bold mb-2">{alert.type} Reported</h3>
+                  <h3 className="mb-2">{alert.type} Reported</h3>
                   <p className="text-gray-600 mb-3">{alert.description}</p>
-                  <div className="flex items-center text-sm text-gray-500 space-x-4">
-                    <div className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      Nearby
+                  <div className="flex flex-items-center text-sm text-gray-500 flex-gap">
+                    <div className="flex flex-items-center">
+                      <MapPin className="w-4 h-4" />
+                      <span style={{ marginLeft: '0.25rem' }}>Nearby</span>
                     </div>
-                    <div className="flex items-center">
-                      <Clock className="w-4 h-4 mr-1" />
-                      {new Date(alert.createdAt).toLocaleString()}
+                    <div className="flex flex-items-center">
+                      <Clock className="w-4 h-4" />
+                      <span style={{ marginLeft: '0.25rem' }}>
+                        {new Date(alert.createdAt).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -140,4 +142,3 @@ function Alerts() {
 }
 
 export default Alerts;
-
