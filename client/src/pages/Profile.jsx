@@ -13,9 +13,13 @@ function Profile() {
 
   useEffect(() => {
     // Load user's reports from localStorage
-    if (currentUser) {
+    if (currentUser && currentUser.username) {
       const allReports = JSON.parse(localStorage.getItem(REPORTS_STORAGE_KEY) || '[]');
-      const userReports = allReports.filter(report => report.userId === currentUser.uid);
+      // Filter by username (backward compatible with uid)
+      const userReports = allReports.filter(report => 
+        report.userId === currentUser.uid || 
+        report.username === currentUser.username
+      );
       setMyReports(userReports);
     }
   }, [currentUser]);
@@ -26,7 +30,7 @@ function Profile() {
       toast.success('Signed out');
       navigate('/', { replace: true });
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to sign out');
     }
   };
 
@@ -45,10 +49,12 @@ function Profile() {
             </div>
             <div>
               <h1>{currentUser.username || currentUser.displayName || 'User'}</h1>
-              <p className="text-gray-600 flex flex-items-center flex-gap-sm">
-                <Mail className="w-4 h-4" />
-                {currentUser.email}
-              </p>
+              {currentUser.email && (
+                <p className="text-gray-600 flex flex-items-center flex-gap-sm">
+                  <Mail className="w-4 h-4" />
+                  {currentUser.email}
+                </p>
+              )}
               {currentUser.createdAt && (
                 <p className="text-sm text-gray-500 flex flex-items-center flex-gap-sm mt-1">
                   <Calendar className="w-4 h-4" />

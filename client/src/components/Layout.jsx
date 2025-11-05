@@ -29,7 +29,15 @@ function Layout({ children }) {
           <div className="navbar-auth">
             {currentUser ? (
               <div className="navbar-username">
-                <span className="username-text">
+                <span className="username-text" style={{ 
+                  color: 'white', 
+                  fontWeight: '600',
+                  fontSize: '1rem',
+                  padding: '0.5rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  backdropFilter: 'blur(10px)'
+                }}>
                   {currentUser.username || currentUser.displayName || 'User'}
                 </span>
               </div>

@@ -19,20 +19,20 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route 
         path="/login" 
-        element={currentUser ? <Navigate to="/home" replace /> : <Login />} 
+        element={currentUser ? <Navigate to="/" replace /> : <Login />} 
       />
       <Route 
         path="/signup" 
-        element={currentUser ? <Navigate to="/home" replace /> : <SignUp />} 
+        element={currentUser ? <Navigate to="/" replace /> : <SignUp />} 
       />
       
-      {/* Landing Page - Only for unauthenticated users */}
+      {/* Landing Page - Shows Signup/Login if not logged in, shows app if logged in */}
       <Route
         path="/"
-        element={currentUser ? <Navigate to="/home" replace /> : <Landing />}
+        element={<Landing />}
       />
 
-      {/* Protected Routes */}
+      {/* Protected Routes - Only accessible when logged in */}
       <Route
         path="/*"
         element={

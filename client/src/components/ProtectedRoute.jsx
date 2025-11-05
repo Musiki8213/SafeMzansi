@@ -1,10 +1,10 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../firebase/authContext';
+import { getAuthToken } from '../utils/api';
 
 function ProtectedRoute({ children }) {
-  const { currentUser } = useAuth();
+  const token = getAuthToken();
 
-  if (!currentUser) {
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
@@ -12,4 +12,3 @@ function ProtectedRoute({ children }) {
 }
 
 export default ProtectedRoute;
-

@@ -1,7 +1,16 @@
-import { Link } from 'react-router-dom';
-import { Shield, Map, AlertTriangle, TrendingUp, Users, Lock, ArrowRight } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
+import { Shield, Map, TrendingUp, Users, ArrowRight } from 'lucide-react';
+import { useAuth } from '../firebase/authContext';
 
 function Landing() {
+  const { currentUser } = useAuth();
+
+  // If user is logged in, redirect to home page
+  if (currentUser) {
+    return <Navigate to="/home" replace />;
+  }
+  
+  // Show landing page with Signup/Login buttons when not logged in
   return (
     <div className="landing-page">
       {/* Hero Section */}
@@ -21,11 +30,11 @@ function Landing() {
             </p>
             <div className="landing-cta">
               <Link to="/signup" className="btn btn-primary">
-                Get Started
+                Sign Up
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <Link to="/login" className="btn btn-secondary">
-                Sign In
+                Login
               </Link>
             </div>
           </div>
@@ -105,11 +114,11 @@ function Landing() {
             </p>
             <div className="landing-cta">
               <Link to="/signup" className="btn btn-primary">
-                Create Free Account
+                Sign Up
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <Link to="/login" className="btn btn-outline">
-                Already have an account? Sign in
+                Login
               </Link>
             </div>
           </div>
@@ -120,4 +129,3 @@ function Landing() {
 }
 
 export default Landing;
-
