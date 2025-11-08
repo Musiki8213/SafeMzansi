@@ -111,3 +111,26 @@ export const authAPI = {
     });
   },
 };
+
+// Reports API functions
+export const reportsAPI = {
+  getReports: async () => {
+    return apiRequest('/reports', {
+      method: 'GET',
+    });
+  },
+
+  submitReport: async (title, description, type, location, lat, lng) => {
+    return apiRequest('/reports', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        description,
+        type,
+        location,
+        lat,
+        lng
+      }),
+    });
+  },
+};
