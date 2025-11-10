@@ -12,14 +12,8 @@ let initPromise = null;
  * This prevents the setOptions warning and ensures optimal loading
  */
 export const initializeGoogleMaps = async () => {
-  // If Google Maps is already loaded (e.g., from a script tag), skip setOptions
-  if (window.google?.maps?.importLibrary) {
-    mapsApiInitialized = true;
-    return Promise.resolve();
-  }
-
-  // If already initialized, return immediately
-  if (mapsApiInitialized && window.google?.maps) {
+  // If already initialized and Google Maps is fully loaded, return immediately
+  if (mapsApiInitialized && window.google?.maps?.Map) {
     return Promise.resolve();
   }
 
@@ -31,8 +25,10 @@ export const initializeGoogleMaps = async () => {
   // Start initialization
   initPromise = (async () => {
     try {
-      // Only call setOptions if Google Maps isn't already loaded
-      if (!mapsApiInitialized && !window.google?.maps?.importLibrary) {
+      // CRITICAL: Always call setOptions first, even if Google Maps appears to be loaded
+      // This ensures the loader is properly configured before any importLibrary calls
+      // The @googlemaps/js-api-loader requires setOptions to be called before importLibrary
+      if (!mapsApiInitialized) {
         setOptions({
           apiKey: GOOGLE_MAPS_API_KEY,
           version: 'weekly',
@@ -43,8 +39,11 @@ export const initializeGoogleMaps = async () => {
       }
 
       // Wait for Google Maps to be available
+      // If it's not loaded yet, import the maps library to trigger loading
       if (!window.google?.maps) {
-        // Import maps library to trigger loading
+        await importLibrary('maps');
+      } else if (!window.google?.maps?.Map) {
+        // If maps object exists but Map class doesn't, import it
         await importLibrary('maps');
       }
 
@@ -62,10 +61,13 @@ export const initializeGoogleMaps = async () => {
 
 /**
  * Import a Google Maps library
- * Ensures API is initialized first
+ * Ensures API is initialized first (setOptions is always called)
  */
 export const loadGoogleMapsLibrary = async (libraryName) => {
+  // Always ensure initialization (which calls setOptions) before importing
   await initializeGoogleMaps();
+  
+  // Now safe to import the library
   return await importLibrary(libraryName);
 };
 

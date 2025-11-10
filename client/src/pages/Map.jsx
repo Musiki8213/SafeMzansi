@@ -73,8 +73,8 @@ function SafeMzansiMap() {
         // 2. Enable Maps JavaScript API
         // 3. Verify API key restrictions allow your domain
         // Map ID is required for Advanced Markers
-        // You can create one in Google Cloud Console > Maps > Map Styles
-        // For now, we'll use a default map ID or create one programmatically
+        // Note: When mapId is present, styles must be set in Google Cloud Console, not here
+        // Remove mapId if you want to use custom styles, or remove styles if using mapId
         const mapOptions = {
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
@@ -84,24 +84,8 @@ function SafeMzansiMap() {
           streetViewControl: false,
           fullscreenControl: true,
           mapTypeControl: false,
-          mapId: 'DEMO_MAP_ID', // Default Map ID for Advanced Markers (works without creating custom Map ID)
-          styles: [
-            {
-              featureType: 'water',
-              elementType: 'geometry',
-              stylers: [{ color: '#A8DADC' }]
-            },
-            {
-              featureType: 'landscape',
-              elementType: 'geometry',
-              stylers: [{ color: '#F1FAEE' }]
-            },
-            {
-              featureType: 'poi',
-              elementType: 'labels',
-              stylers: [{ visibility: 'off' }]
-            }
-          ]
+          mapId: 'DEMO_MAP_ID' // Default Map ID for Advanced Markers
+          // Note: styles removed because mapId is present - styles must be configured in Google Cloud Console
         };
 
         map.current = new Map(mapContainer.current, mapOptions);

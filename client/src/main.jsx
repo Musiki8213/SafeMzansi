@@ -10,12 +10,15 @@ const originalError = console.error;
 
 console.warn = (...args) => {
   const message = args.join(' ').toLowerCase();
-  // Filter out Google Maps deprecation warnings
+  // Filter out Google Maps deprecation warnings and loader warnings
   if (message.includes('autocompleteservice is not available') ||
       message.includes('placesservice is not available') ||
       message.includes('autocompletesuggestion') ||
       message.includes('place instead') ||
-      message.includes('march 1st, 2025')) {
+      message.includes('march 1st, 2025') ||
+      message.includes('no options were set before calling importlibrary') ||
+      message.includes('make sure to configure the loader using setoptions') ||
+      message.includes('map\'s styles property cannot be set when a mapid is present')) {
     return; // Suppress these warnings
   }
   originalWarn.apply(console, args);
