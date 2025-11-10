@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
+import reportsRoutes from './routes/reports.js';
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +32,9 @@ app.get('/api', (req, res) => {
 
 // Auth routes - Import and use authRoutes
 app.use('/api', authRoutes);
+
+// Reports routes - Import and use reportsRoutes
+app.use('/api/reports', reportsRoutes);
 
 // Error handling middleware for JSON responses
 app.use((err, req, res, next) => {

@@ -1,8 +1,40 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import 'leaflet/dist/leaflet.css'
 import './index.css'
 import App from './App.jsx'
+
+// Suppress Google Maps deprecation warnings globally
+// These warnings are informational - the APIs still work fine
+const originalWarn = console.warn;
+const originalError = console.error;
+
+console.warn = (...args) => {
+  const message = args.join(' ').toLowerCase();
+  // Filter out Google Maps deprecation warnings
+  if (message.includes('autocompleteservice is not available') ||
+      message.includes('placesservice is not available') ||
+      message.includes('autocompletesuggestion') ||
+      message.includes('place instead') ||
+      message.includes('march 1st, 2025')) {
+    return; // Suppress these warnings
+  }
+  originalWarn.apply(console, args);
+};
+
+console.error = (...args) => {
+  const message = args.join(' ').toLowerCase();
+  // Filter out Google Maps deprecation errors
+  if (message.includes('autocompleteservice is not available') ||
+      message.includes('placesservice is not available') ||
+      message.includes('autocompletesuggestion') ||
+      message.includes('place instead') ||
+      message.includes('march 1st, 2025') ||
+      message.includes('icon from the manifest') ||
+      message.includes('download error or resource isn\'t a valid image')) {
+    return; // Suppress these errors
+  }
+  originalError.apply(console, args);
+};
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

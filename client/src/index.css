@@ -1387,6 +1387,16 @@ p {
 
 /* ===== Map Page ===== */
 
+/* Base glassy overlay class for map components */
+.glassy-overlay {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(29, 53, 87, 0.2);
+  transition: all 0.3s ease;
+}
+
 .map-page {
   height: calc(100vh - 64px);
   position: relative;
@@ -1404,15 +1414,15 @@ p {
   height: 100%;
 }
 
-/* MapLibre GL JS Container */
+/* Google Maps Container */
 .map-container-inner {
   height: 100%;
   width: 100%;
   z-index: 1;
 }
 
-/* MapLibre Popup Styling */
-.maplibregl-popup-content {
+/* Google Maps InfoWindow Styling */
+.gm-style .gm-style-iw-c {
   background: rgba(255, 255, 255, 0.95) !important;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -1420,20 +1430,20 @@ p {
   box-shadow: 0 8px 32px rgba(29, 53, 87, 0.2) !important;
   border: 1px solid rgba(255, 255, 255, 0.5) !important;
   padding: 0 !important;
-  min-width: 250px;
   font-family: inherit;
 }
 
-.maplibregl-popup-close-button {
-  color: var(--primary-blue) !important;
-  font-size: 1.5rem !important;
-  padding: 0.5rem !important;
-  right: 0.5rem !important;
-  top: 0.5rem !important;
+.gm-style .gm-style-iw-d {
+  overflow: hidden !important;
 }
 
-.maplibregl-popup-tip {
-  border-top-color: rgba(255, 255, 255, 0.95) !important;
+.gm-style-iw-button {
+  color: var(--primary-blue) !important;
+  opacity: 0.8;
+}
+
+.gm-style-iw-button:hover {
+  opacity: 1;
 }
 
 .crime-popup-content {
@@ -1527,70 +1537,19 @@ p {
   }
 }
 
-/* MapLibre Controls Styling */
-.maplibregl-ctrl-group {
+/* Google Maps Controls Styling */
+.gm-control-active,
+.gm-svpc,
+.gmnoprint {
   background: rgba(255, 255, 255, 0.9) !important;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-sm) !important;
   box-shadow: 0 4px 16px rgba(29, 53, 87, 0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
 }
 
-.maplibregl-ctrl button {
-  border: none !important;
-  background: transparent !important;
-  color: var(--primary-blue) !important;
-}
-
-.maplibregl-ctrl-scale {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: var(--radius-sm) !important;
-  padding: 0.25rem 0.5rem !important;
-  font-size: 0.75rem !important;
-  color: var(--text-dark) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-}
-
-.maplibregl-popup-close-button {
-  color: var(--primary-blue) !important;
-  font-size: 1.5rem !important;
-  padding: 0.5rem !important;
-  right: 0.5rem !important;
-  top: 0.5rem !important;
-}
-
-.maplibregl-popup-tip {
-  border-top-color: rgba(255, 255, 255, 0.95) !important;
-}
-
-/* MapLibre Controls Styling */
-.maplibregl-ctrl-group {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: var(--radius-sm) !important;
-  box-shadow: 0 4px 16px rgba(29, 53, 87, 0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-}
-
-.maplibregl-ctrl button {
-  border: none !important;
-  background: transparent !important;
-  color: var(--primary-blue) !important;
-}
-
-.maplibregl-ctrl-scale {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: var(--radius-sm) !important;
-  padding: 0.25rem 0.5rem !important;
-  font-size: 0.75rem !important;
-  color: var(--text-dark) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+.gm-style .gm-style-cc {
+  display: none; /* Hide Google Maps copyright - you may want to keep this visible */
 }
 
 /* Bounce animation for manual pin */
@@ -1968,6 +1927,49 @@ p {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+.legend-pin {
+  width: 24px;
+  height: 36px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.legend-pin.verified-pin::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 36px;
+  background: #DC2626;
+  clip-path: path('M12 0C5.373 0 0 5.373 0 12c0 12 12 24 12 24s12-12 12-24C24 5.373 18.627 0 12 0z');
+  border: 2px solid #B91C1C;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.legend-pin.unverified-pin::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 36px;
+  background: #F97316;
+  clip-path: path('M12 0C5.373 0 0 5.373 0 12c0 12 12 24 12 24s12-12 12-24C24 5.373 18.627 0 12 0z');
+  border: 2px solid #EA580C;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.legend-pin.user-pin::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #3B82F6;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .legend-label {
   font-size: 0.75rem;
   color: var(--text-dark);
@@ -2064,10 +2066,166 @@ p {
   }
 }
 
+/* Nearby Alert Banner */
+.nearby-alert-banner {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  background: rgba(220, 38, 38, 0.95);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.5rem;
+  box-shadow: 0 8px 32px rgba(220, 38, 38, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  max-width: 90%;
+  width: 500px;
+  animation: slide-down-alert 0.5s ease-out;
+}
+
+@keyframes slide-down-alert {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.alert-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.alert-icon {
+  width: 2rem;
+  height: 2rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.alert-text {
+  flex: 1;
+}
+
+.alert-text h4 {
+  margin: 0 0 0.25rem 0;
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.alert-text p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+}
+
+.alert-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.alert-btn-primary,
+.alert-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.alert-btn-primary {
+  background: white;
+  color: #DC2626;
+}
+
+.alert-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.alert-btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.alert-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.alert-popup-content {
+  padding: 1rem;
+  min-width: 280px;
+  font-family: inherit;
+}
+
+/* Map Controls */
+.map-controls {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  box-shadow: 0 8px 32px rgba(29, 53, 87, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-sm);
+  color: var(--primary-blue);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(29, 53, 87, 0.2);
+}
+
+.control-btn.active {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10B981;
+  color: #10B981;
+  animation: pulse-pin 2s ease infinite;
+}
+
 /* Manual Pin Location Info */
 .manual-pin-info {
   position: absolute;
-  bottom: 5.5rem;
+  bottom: 8rem;
   right: 1rem;
   z-index: 1000;
   background: rgba(255, 255, 255, 0.25);
@@ -2342,6 +2500,71 @@ p {
     margin: 1rem;
     border-radius: var(--radius-md);
   }
+
+  /* Mobile responsive styles for new components */
+  .nearby-alert-banner {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+    transform: none;
+    padding: 0.75rem 1rem;
+  }
+
+  .alert-content {
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .alert-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .alert-text h4 {
+    font-size: 1rem;
+  }
+
+  .alert-text p {
+    font-size: 0.8125rem;
+  }
+
+  .alert-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .alert-btn-primary,
+  .alert-btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .map-controls {
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .control-btn {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8125rem;
+  }
+
+  .control-btn span {
+    display: none;
+  }
+
+  .manual-pin-info {
+    bottom: 6rem;
+    right: 1rem;
+    left: 1rem;
+    max-width: none;
+    font-size: 0.8125rem;
+  }
 }
 
 /* ===== Report Crime Page Map ===== */
@@ -2356,23 +2579,11 @@ p {
   border: 1px solid rgba(29, 53, 87, 0.1);
 }
 
-.report-map-container .leaflet-container {
+.report-map-container > div {
   height: 400px;
   width: 100%;
   z-index: 1;
   border-radius: var(--radius-sm);
-}
-
-.report-map-container .leaflet-marker-draggable {
-  cursor: move;
-}
-
-.report-map-container .leaflet-marker-icon {
-  transition: transform 0.2s ease;
-}
-
-.report-map-container .leaflet-marker-icon:hover {
-  transform: scale(1.1);
 }
 
 @media (max-width: 768px) {
@@ -2380,7 +2591,7 @@ p {
     margin-top: 0.75rem;
   }
 
-  .report-map-container .leaflet-container {
+  .report-map-container > div {
     height: 300px;
   }
 }
