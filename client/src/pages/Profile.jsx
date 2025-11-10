@@ -1,27 +1,78 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../firebase/authContext';
 import { useNavigate } from 'react-router-dom';
+import { reportsAPI } from '../utils/api';
 import toast from 'react-hot-toast';
-import { User, LogOut, Shield, Mail, Calendar } from 'lucide-react';
-
-const REPORTS_STORAGE_KEY = 'safemzansi_reports';
+import { User, LogOut, Shield, Mail, Calendar, Loader, MapPin, Clock, CheckCircle } from 'lucide-react';
 
 function Profile() {
   const { currentUser, logout, userCredibility } = useAuth();
   const navigate = useNavigate();
   const [myReports, setMyReports] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load user's reports from localStorage
-    if (currentUser && currentUser.username) {
-      const allReports = JSON.parse(localStorage.getItem(REPORTS_STORAGE_KEY) || '[]');
-      // Filter by username (backward compatible with uid)
-      const userReports = allReports.filter(report => 
-        report.userId === currentUser.uid || 
-        report.username === currentUser.username
-      );
-      setMyReports(userReports);
-    }
+    // Fetch user's reports from API
+    const fetchMyReports = async () => {
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await reportsAPI.getMyReports();
+        
+        // Handle different response formats
+        const reportsData = response.reports || response.data || response || [];
+        
+        // Sort by createdAt (newest first)
+        const sortedReports = reportsData
+          .map(report => ({
+            id: report.id || report._id,
+            title: report.title || 'Crime Report',
+            description: report.description || '',
+            type: report.type || 'Crime',
+            location: report.location || 'Unknown Location',
+            verified: report.verified || false,
+            createdAt: report.createdAt || new Date().toISOString(),
+            lat: report.lat,
+            lng: report.lng
+          }))
+          .sort((a, b) => {
+            // Sort by timestamp, newest first
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA;
+          });
+        
+        setMyReports(sortedReports);
+      } catch (error) {
+        console.error('Error fetching my reports:', error);
+        // Handle gracefully
+        if (error.message.includes('Network error') || 
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('404') ||
+            error.message.includes('Route not found') ||
+            error.message.includes('Authentication required')) {
+          setMyReports([]);
+          if (error.message.includes('Authentication required')) {
+            toast.error('Please sign in to view your reports');
+          }
+        } else {
+          toast.error('Failed to load your reports');
+          setMyReports([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMyReports();
+    
+    // Refresh reports every 30 seconds
+    const interval = setInterval(fetchMyReports, 30000);
+    return () => clearInterval(interval);
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -96,8 +147,15 @@ function Profile() {
       <div className="card glassy-card">
         <h2 className="mb-4">My Reports</h2>
         <div>
-          {myReports.length === 0 ? (
-            <p className="text-gray-600 text-center" style={{ padding: '2rem' }}>No reports yet</p>
+          {loading ? (
+            <div className="text-center" style={{ padding: '2rem' }}>
+              <Loader className="w-8 h-8 mx-auto mb-2 animate-spin" style={{ color: '#007A4D' }} />
+              <p className="text-gray-600">Loading your reports...</p>
+            </div>
+          ) : myReports.length === 0 ? (
+            <p className="text-gray-600 text-center" style={{ padding: '2rem' }}>
+              No reports yet. Start reporting crimes to help keep your community safe!
+            </p>
           ) : (
             <div className="grid grid-1 gap-4">
               {myReports.map((report) => (
@@ -107,16 +165,25 @@ function Profile() {
                       <span className="badge badge-danger">{report.type}</span>
                       {report.verified && (
                         <span className="badge badge-success flex flex-items-center flex-gap-sm">
-                          <Shield className="w-4 h-4" />
+                          <CheckCircle className="w-4 h-4" />
                           Verified
                         </span>
                       )}
                     </div>
                   </div>
+                  <h3 className="mb-2">{report.title}</h3>
                   <p className="text-gray-600 mb-3">{report.description}</p>
-                  <div className="flex flex-items-center text-sm text-gray-500 flex-gap">
-                    <span>{new Date(report.createdAt).toLocaleDateString()}</span>
-                    <span>👍 {report.likes || 0} • 👎 {report.dislikes || 0}</span>
+                  <div className="flex flex-items-center text-sm text-gray-500 flex-gap mb-2">
+                    <div className="flex flex-items-center">
+                      <MapPin className="w-4 h-4" />
+                      <span style={{ marginLeft: '0.25rem' }}>{report.location}</span>
+                    </div>
+                    <div className="flex flex-items-center">
+                      <Clock className="w-4 h-4" />
+                      <span style={{ marginLeft: '0.25rem' }}>
+                        {new Date(report.createdAt).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}

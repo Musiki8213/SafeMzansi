@@ -41,13 +41,53 @@ router.get('/', verifyToken, async (req, res) => {
         lng: report.lng,
         verified: report.verified || false,
         createdAt: report.createdAt,
-        username: report.username || 'Anonymous'
+        username: report.username || 'Anonymous',
+        userId: report.userId ? report.userId.toString() : null
       }))
     });
   } catch (error) {
     console.error('Error fetching reports:', error);
     return res.status(500).json({ 
       message: 'Server error fetching reports', 
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/reports/my-reports - Fetch current user's reports
+router.get('/my-reports', verifyToken, async (req, res) => {
+  try {
+    // Require authentication for this endpoint
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        message: 'Authentication required to view your reports' 
+      });
+    }
+
+    const reports = await Report.find({ userId: req.user.id })
+      .sort({ createdAt: -1 }) // Most recent first
+      .limit(1000)
+      .lean();
+
+    // Format response
+    return res.json({
+      reports: reports.map(report => ({
+        id: report._id.toString(),
+        title: report.title,
+        description: report.description,
+        type: report.type,
+        location: report.location,
+        lat: report.lat,
+        lng: report.lng,
+        verified: report.verified || false,
+        createdAt: report.createdAt,
+        username: report.username || 'Anonymous'
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching user reports:', error);
+    return res.status(500).json({ 
+      message: 'Server error fetching your reports', 
       error: error.message 
     });
   }

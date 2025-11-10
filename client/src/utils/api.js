@@ -120,6 +120,12 @@ export const reportsAPI = {
     });
   },
 
+  getMyReports: async () => {
+    return apiRequest('/reports/my-reports', {
+      method: 'GET',
+    });
+  },
+
   submitReport: async (title, description, type, location, lat, lng) => {
     return apiRequest('/reports', {
       method: 'POST',

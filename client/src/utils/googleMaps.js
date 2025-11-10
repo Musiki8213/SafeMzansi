@@ -32,7 +32,7 @@ export const initializeGoogleMaps = async () => {
         setOptions({
           apiKey: GOOGLE_MAPS_API_KEY,
           version: 'weekly',
-          libraries: ['places', 'geocoding', 'visualization']
+          libraries: ['places', 'geocoding', 'visualization', 'routes']
         });
         mapsApiInitialized = true;
         console.log('Google Maps API initialized globally');

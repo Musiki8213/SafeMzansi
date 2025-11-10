@@ -1,54 +1,74 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../firebase/authContext';
-import { Bell, MapPin, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-
-// Mock alerts data
-const mockAlerts = [
-  {
-    id: 1,
-    type: 'Theft',
-    location: 'Johannesburg CBD',
-    description: 'Vehicle break-in reported near Main Street. Community verified.',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    verified: true
-  },
-  {
-    id: 2,
-    type: 'Suspicious Activity',
-    location: 'Cape Town Central',
-    description: 'Unusual activity reported in the area. Multiple witnesses.',
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    verified: true
-  },
-  {
-    id: 3,
-    type: 'Robbery',
-    location: 'Durban North',
-    description: 'Incident reported and verified by community. Police notified.',
-    timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    verified: true
-  },
-  {
-    id: 4,
-    type: 'Vandalism',
-    location: 'Pretoria East',
-    description: 'Property damage reported. Under review.',
-    timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    verified: false
-  },
-  {
-    id: 5,
-    type: 'Drug Activity',
-    location: 'Port Elizabeth',
-    description: 'Suspected drug activity in the area. Report verified.',
-    timestamp: new Date(Date.now() - 15 * 60 * 60 * 1000).toISOString(),
-    verified: true
-  }
-];
+import { reportsAPI } from '../utils/api';
+import toast from 'react-hot-toast';
+import { Bell, MapPin, Clock, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 function Alerts() {
   const { currentUser } = useAuth();
-  const [alerts] = useState(mockAlerts);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch reports from API
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        setLoading(true);
+        const response = await reportsAPI.getReports();
+        
+        // Handle different response formats
+        const reportsData = response.reports || response.data || response || [];
+        
+        // Sort by createdAt (newest first) - backend already does this, but ensure it
+        const sortedReports = reportsData
+          .map(report => ({
+            id: report.id || report._id,
+            type: report.type || 'Crime',
+            location: report.location || 'Unknown Location',
+            description: report.description || report.title || 'No description',
+            timestamp: report.createdAt || report.timestamp || new Date().toISOString(),
+            verified: report.verified || false,
+            title: report.title,
+            username: report.username || 'Anonymous'
+          }))
+          .sort((a, b) => {
+            // Sort by timestamp, newest first
+            const dateA = new Date(a.timestamp).getTime();
+            const dateB = new Date(b.timestamp).getTime();
+            return dateB - dateA;
+          });
+        
+        setAlerts(sortedReports);
+      } catch (error) {
+        console.error('Error fetching alerts:', error);
+        // Handle gracefully - show empty state if backend is not available
+        if (error.message.includes('Network error') || 
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('404') ||
+            error.message.includes('Route not found')) {
+          setAlerts([]);
+          toast.info('Unable to load alerts. Backend may not be running.', {
+            duration: 3000
+          });
+        } else {
+          toast.error('Failed to load alerts');
+          setAlerts([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (currentUser) {
+      fetchAlerts();
+      
+      // Refresh alerts every 30 seconds
+      const interval = setInterval(fetchAlerts, 30000);
+      return () => clearInterval(interval);
+    } else {
+      setLoading(false);
+    }
+  }, [currentUser]);
 
   if (!currentUser) {
     return (
@@ -78,12 +98,18 @@ function Alerts() {
       </div>
 
       {/* Alerts List */}
-      {alerts.length === 0 ? (
+      {loading ? (
+        <div className="card glassy-card text-center" style={{ padding: '3rem' }}>
+          <Loader className="w-16 h-16 mx-auto mb-4 animate-spin" style={{ color: '#007A4D' }} />
+          <h3 className="mb-2">Loading Alerts...</h3>
+          <p className="text-gray-600">Fetching latest reports</p>
+        </div>
+      ) : alerts.length === 0 ? (
         <div className="card glassy-card text-center" style={{ padding: '3rem' }}>
           <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10B981' }} />
           <h3 className="mb-2">All Clear!</h3>
           <p className="text-gray-600">
-            No recent alerts in your area. Stay safe!
+            No recent alerts. Stay safe!
           </p>
         </div>
       ) : (
@@ -101,7 +127,7 @@ function Alerts() {
                   )}
                 </div>
               </div>
-              <h3 className="mb-2">{alert.type} Reported</h3>
+              <h3 className="mb-2">{alert.title || `${alert.type} Reported`}</h3>
               <p className="text-gray-600 mb-4">{alert.description}</p>
               <div className="flex flex-items-center text-sm text-gray-500 flex-gap">
                 <div className="flex flex-items-center">
@@ -115,6 +141,11 @@ function Alerts() {
                   </span>
                 </div>
               </div>
+              {alert.username && (
+                <div className="mt-2 text-xs text-gray-400">
+                  Reported by: {alert.username}
+                </div>
+              )}
             </div>
           ))}
         </div>
