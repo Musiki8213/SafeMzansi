@@ -632,6 +632,42 @@ function SafeMzansiMap() {
     console.log(`Attempting to find safe route avoiding ${hotspots.length} hotspots...`);
     let bestRoute = null;
     let bestHotspotCount = originalHotspotCount || Infinity;
+    let bestRouteDistance = Infinity;
+    let bestRouteDuration = Infinity;
+    
+    // Get original route distance and duration for comparison
+    let originalRouteDistance = Infinity;
+    let originalRouteDuration = Infinity;
+    try {
+      const originalRoute = await new Promise((resolve) => {
+        directionsService.current.route(
+          {
+            origin: origin,
+            destination: dest,
+            travelMode: window.google.maps.TravelMode.DRIVING
+          },
+          (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+              const totalDistance = result.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+              const totalDuration = result.routes[0].legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+              originalRouteDistance = totalDistance;
+              originalRouteDuration = totalDuration;
+              resolve(result);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.log('Could not get original route for comparison');
+    }
+    
+    console.log(`Original route: ${(originalRouteDistance / 1000).toFixed(2)} km, ${Math.floor(originalRouteDuration / 60)} min`);
+    
+    // Set a timeout to ensure we return within seconds
+    const startTime = Date.now();
+    const MAX_SEARCH_TIME = 5000; // 5 seconds max
     
     // Create waypoints in multiple directions around each hotspot
     // Only use waypoints that are verified to be far enough from hotspots
@@ -720,104 +756,133 @@ function SafeMzansiMap() {
       return waypoints;
     };
     
-    // Try multiple strategies with increasing offset distances and different approaches
-    // Also increase minimum safe distance requirement
+    // Optimized strategy list - fewer strategies, focused on efficiency
+    // Prioritize faster routes (time-saving) while avoiding hotspots
     const strategies = [
-      // Small offsets with 1km safe distance
-      { offset: 0.02, avoidHighways: false, direction: 0, minSafe: 1000 },   // ~2km
-      { offset: 0.02, avoidHighways: true, direction: 0, minSafe: 1000 },    // ~2km, avoid highways
-      { offset: 0.02, avoidHighways: false, direction: 2, minSafe: 1000 },   // ~2km, different direction
-      { offset: 0.02, avoidHighways: true, direction: 2, minSafe: 1000 },   // ~2km, avoid highways, different direction
+      // Phase 1: Small, efficient offsets (try fastest routes first)
+      { offset: 0.015, avoidHighways: false, direction: 0, minSafe: 1000 },   // ~1.5km - small detour
+      { offset: 0.02, avoidHighways: false, direction: 0, minSafe: 1000 },    // ~2km
+      { offset: 0.02, avoidHighways: false, direction: 2, minSafe: 1000 },    // ~2km, different direction
+      { offset: 0.02, avoidHighways: true, direction: 0, minSafe: 1000 },    // ~2km, avoid highways (may be faster in city)
       
-      // Medium offsets with 1.5km safe distance
-      { offset: 0.03, avoidHighways: false, direction: 0, minSafe: 1500 },   // ~3km
-      { offset: 0.03, avoidHighways: true, direction: 0, minSafe: 1500 },    // ~3km, avoid highways
-      { offset: 0.03, avoidHighways: false, direction: 4, minSafe: 1500 },   // ~3km, different direction
-      { offset: 0.03, avoidHighways: true, direction: 4, minSafe: 1500 },   // ~3km, avoid highways, different direction
+      // Phase 2: Medium offsets (if small ones don't work)
+      { offset: 0.03, avoidHighways: false, direction: 0, minSafe: 1500 },    // ~3km
+      { offset: 0.03, avoidHighways: true, direction: 0, minSafe: 1500 },      // ~3km, avoid highways
       
-      // Large offsets with 2km safe distance
-      { offset: 0.05, avoidHighways: false, direction: 0, minSafe: 2000 },   // ~5km
-      { offset: 0.05, avoidHighways: true, direction: 0, minSafe: 2000 },    // ~5km, avoid highways
-      { offset: 0.05, avoidHighways: false, direction: 2, minSafe: 2000 },   // ~5km, different direction
-      { offset: 0.05, avoidHighways: true, direction: 2, minSafe: 2000 },    // ~5km, avoid highways, different direction
-      
-      // Very large offsets with 3km safe distance
-      { offset: 0.08, avoidHighways: false, direction: 0, minSafe: 3000 },   // ~8km
-      { offset: 0.08, avoidHighways: true, direction: 0, minSafe: 3000 },    // ~8km, avoid highways
-      { offset: 0.1, avoidHighways: false, direction: 0, minSafe: 3000 },   // ~10km
-      { offset: 0.1, avoidHighways: true, direction: 0, minSafe: 3000 },    // ~10km, avoid highways
+      // Phase 3: Larger offsets (last resort - may be longer but safer)
+      { offset: 0.05, avoidHighways: false, direction: 0, minSafe: 2000 },      // ~5km
+      { offset: 0.05, avoidHighways: true, direction: 0, minSafe: 2000 },      // ~5km, avoid highways
     ];
     
-    // Try each strategy
+    // Try each strategy with timeout check
     for (const strategy of strategies) {
+      // Check if we've exceeded time limit
+      if (Date.now() - startTime > MAX_SEARCH_TIME) {
+        console.log('Time limit reached, returning best route found so far');
+        break;
+      }
+      
       const waypoints = createAvoidanceWaypoints(hotspots, strategy.offset, strategy.direction, strategy.minSafe, origin);
       
       // Skip if we couldn't create safe waypoints
       if (waypoints.length === 0) {
-        console.log(`Strategy (offset: ${strategy.offset}) - no safe waypoints found`);
         continue;
       }
       
       try {
-        const route = await new Promise((resolve, reject) => {
+        const route = await new Promise((resolve) => {
           const request = {
             origin: origin,
             destination: dest,
             travelMode: window.google.maps.TravelMode.DRIVING,
             avoidHighways: strategy.avoidHighways,
             avoidTolls: false,
-            optimizeWaypoints: false // Don't optimize - we want to follow our waypoints exactly
+            optimizeWaypoints: false
           };
           
-          // Only add waypoints if we have any (and limit to 23)
           if (waypoints.length > 0) {
-            request.waypoints = waypoints.slice(0, 23); // Google Maps max is 25, but we use 23 to be safe
+            request.waypoints = waypoints.slice(0, 23);
           }
           
-          directionsService.current.route(
-            request,
-            (result, status) => {
-              if (status === window.google.maps.DirectionsStatus.OK) {
-                resolve(result);
-              } else {
-                console.log(`Route calculation failed with status: ${status}`);
-                resolve(null);
-              }
+          directionsService.current.route(request, (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK) {
+              resolve(result);
+            } else {
+              resolve(null);
             }
-          );
+          });
         });
         
         if (route) {
-          // Check if this route actually avoids hotspots
           const routeHotspots = checkRouteForHotspots(route);
-          console.log(`Strategy (offset: ${strategy.offset}, avoidHighways: ${strategy.avoidHighways}, minSafe: ${strategy.minSafe}m) found route with ${routeHotspots.length} hotspots`);
+          const totalDistance = route.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+          const totalDuration = route.routes[0].legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+          const isFaster = totalDuration <= originalRouteDuration;
+          const isShorter = totalDistance <= originalRouteDistance;
+          const efficiencyScore = (originalRouteDuration / totalDuration) * (originalRouteDistance / totalDistance); // Higher is better
           
-          // Accept if it has ZERO hotspots (perfect)
+          console.log(`Strategy (offset: ${strategy.offset}) - ${routeHotspots.length} hotspots, ${(totalDistance / 1000).toFixed(2)} km, ${Math.floor(totalDuration / 60)} min (${isFaster ? 'FASTER' : 'slower'}, ${isShorter ? 'SHORTER' : 'longer'})`);
+          
+          // Perfect route (zero hotspots) - prioritize fast and short
           if (routeHotspots.length === 0) {
-            console.log('✅ Found safe route with zero hotspots!');
-            return route;
+            // If it's faster AND shorter, return immediately
+            if (isFaster && isShorter) {
+              console.log(`✅ Found perfect route: faster AND shorter!`);
+              return route;
+            }
+            // If it's faster OR not much longer (within 20%), return immediately
+            if (isFaster || (totalDuration <= originalRouteDuration * 1.2 && totalDistance <= originalRouteDistance * 1.2)) {
+              console.log(`✅ Found perfect route: efficient!`);
+              return route;
+            }
+            // Otherwise save it but continue
+            if (!bestRoute || routeHotspots.length < bestHotspotCount || 
+                (routeHotspots.length === bestHotspotCount && totalDuration < bestRouteDuration)) {
+              bestRoute = route;
+              bestHotspotCount = routeHotspots.length;
+              bestRouteDistance = totalDistance;
+              bestRouteDuration = totalDuration;
+            }
           } 
-          // Or if it's better than what we've found so far
+          // Better hotspot count - prefer faster routes
           else if (routeHotspots.length < bestHotspotCount) {
-            console.log(`✅ Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
             bestRoute = route;
             bestHotspotCount = routeHotspots.length;
-            // Continue searching for a perfect route (zero hotspots)
-          } else {
-            console.log(`❌ Route has ${routeHotspots.length} hotspots, not better than current best (${bestHotspotCount}), trying next strategy...`);
+            bestRouteDistance = totalDistance;
+            bestRouteDuration = totalDuration;
+            // If it's significantly better (fewer hotspots) and efficient, return early
+            if (routeHotspots.length === 0 || (routeHotspots.length < originalHotspotCount / 2 && isFaster)) {
+              console.log(`✅ Found much better route, returning early`);
+              return route;
+            }
+          } 
+          // Same hotspot count - prefer faster and shorter
+          else if (routeHotspots.length === bestHotspotCount) {
+            const currentEfficiency = (originalRouteDuration / bestRouteDuration) * (originalRouteDistance / bestRouteDistance);
+            if (totalDuration < bestRouteDuration || (totalDuration === bestRouteDuration && totalDistance < bestRouteDistance) ||
+                efficiencyScore > currentEfficiency) {
+              bestRoute = route;
+              bestRouteDistance = totalDistance;
+              bestRouteDuration = totalDuration;
+            }
           }
-        } else {
-          console.log(`❌ Route calculation returned null for strategy (offset: ${strategy.offset})`);
         }
       } catch (error) {
-        console.error('Error calculating route with strategy:', error);
+        console.error('Error calculating route:', error);
         continue;
       }
     }
     
-    // If standard waypoints don't work, try routing around the bounding box of hotspots
-    try {
-      const hotspotBounds = new window.google.maps.LatLngBounds();
+    // Skip bounding box and last resort strategies if we already have a good route and time is running out
+    if (bestRoute && bestHotspotCount === 0 && Date.now() - startTime < MAX_SEARCH_TIME * 0.7) {
+      console.log('Found perfect route early, skipping advanced strategies');
+      return bestRoute;
+    }
+    
+    // If standard waypoints don't work, try routing around the bounding box of hotspots (only if we have time)
+    if (Date.now() - startTime < MAX_SEARCH_TIME * 0.8) {
+      try {
+        const hotspotBounds = new window.google.maps.LatLngBounds();
       hotspots.forEach(hotspot => {
         hotspotBounds.extend({ lat: hotspot.lat, lng: hotspot.lng });
       });
@@ -887,15 +952,31 @@ function SafeMzansiMap() {
             
             if (route) {
               const routeHotspots = checkRouteForHotspots(route);
-              console.log(`Bounding box strategy (offset: ${offset}) found route with ${routeHotspots.length} hotspots`);
+              const totalDistance = route.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+              const totalDuration = route.routes[0].legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+              const isFaster = totalDuration <= originalRouteDuration;
+              
+              console.log(`Bounding box strategy (offset: ${offset}) found route with ${routeHotspots.length} hotspots, ${(totalDistance / 1000).toFixed(2)} km, ${Math.floor(totalDuration / 60)} min`);
               
               if (routeHotspots.length === 0) {
-                console.log('Found safe route using bounding box strategy!');
-                return route;
-              } else if (routeHotspots.length < bestHotspotCount) {
-                console.log(`Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
+                if (isFaster || totalDuration <= originalRouteDuration * 1.2) {
+                  console.log('Found safe route using bounding box strategy!');
+                  return route;
+                } else {
+                  if (!bestRoute || routeHotspots.length < bestHotspotCount || 
+                      (routeHotspots.length === bestHotspotCount && totalDuration < bestRouteDuration)) {
+                    bestRoute = route;
+                    bestHotspotCount = routeHotspots.length;
+                    bestRouteDistance = totalDistance;
+                    bestRouteDuration = totalDuration;
+                  }
+                }
+              } else if (routeHotspots.length < bestHotspotCount || 
+                         (routeHotspots.length === bestHotspotCount && totalDuration < bestRouteDuration)) {
                 bestRoute = route;
                 bestHotspotCount = routeHotspots.length;
+                bestRouteDistance = totalDistance;
+                bestRouteDuration = totalDuration;
               }
             }
           } catch (error) {
@@ -904,27 +985,35 @@ function SafeMzansiMap() {
           }
         }
       }
-    } catch (error) {
-      console.error('Error creating bounding box:', error);
+      } catch (error) {
+        console.error('Error creating bounding box:', error);
+      }
+    } else {
+      console.log('Skipping bounding box strategy due to time limit');
     }
     
-    // Last resort: Try with very large waypoints in all directions
-    // Use even larger minimum safe distances
-    console.log('Trying last resort: very large waypoints...');
-    const lastResortOffsets = [0.15, 0.2, 0.25, 0.3]; // 15km, 20km, 25km, 30km
-    const lastResortMinSafe = [3000, 4000, 5000]; // 3km, 4km, 5km minimum distance
-    
-    for (const minSafe of lastResortMinSafe) {
-      for (const offset of lastResortOffsets) {
-        for (let dir = 0; dir < 8; dir++) {
-          const waypoints = createAvoidanceWaypoints(hotspots, offset, dir, minSafe);
-          
-          // Skip if no safe waypoints
-          if (waypoints.length === 0) continue;
-          
-          try {
-            const route = await new Promise((resolve) => {
-              directionsService.current.route(
+    // Last resort: Try with very large waypoints (only if we still have time and no good route found)
+    if (Date.now() - startTime < MAX_SEARCH_TIME * 0.9 && (!bestRoute || bestHotspotCount >= originalHotspotCount / 2)) {
+      console.log('Trying last resort: very large waypoints...');
+      const lastResortOffsets = [0.15, 0.2]; // Reduced from 4 to 2 offsets
+      const lastResortMinSafe = [4000]; // Reduced from 3 to 1
+      
+      for (const minSafe of lastResortMinSafe) {
+        for (const offset of lastResortOffsets) {
+          for (let dir = 0; dir < 4; dir += 2) { // Try only 4 directions instead of 8
+            // Check time limit
+            if (Date.now() - startTime > MAX_SEARCH_TIME) {
+              break;
+            }
+            
+            const waypoints = createAvoidanceWaypoints(hotspots, offset, dir, minSafe, origin);
+            
+            // Skip if no safe waypoints
+            if (waypoints.length === 0) continue;
+            
+            try {
+              const route = await new Promise((resolve) => {
+                directionsService.current.route(
                 {
                   origin: origin,
                   destination: dest,
@@ -946,27 +1035,48 @@ function SafeMzansiMap() {
             
             if (route) {
               const routeHotspots = checkRouteForHotspots(route);
-              console.log(`Last resort (offset: ${offset}, dir: ${dir}, minSafe: ${minSafe}m) found route with ${routeHotspots.length} hotspots`);
+              const totalDistance = route.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+              const totalDuration = route.routes[0].legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+              const isFaster = totalDuration <= originalRouteDuration;
               
               if (routeHotspots.length === 0) {
-                console.log('Found safe route using last resort strategy!');
-                return route;
-              } else if (routeHotspots.length < bestHotspotCount) {
-                console.log(`Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
+                // Return if it's efficient (faster or not much slower)
+                if (isFaster || totalDuration <= originalRouteDuration * 1.2) {
+                  console.log('Found safe route using last resort strategy!');
+                  return route;
+                }
+                // Save if better than current best
+                if (!bestRoute || routeHotspots.length < bestHotspotCount || 
+                    (routeHotspots.length === bestHotspotCount && totalDuration < bestRouteDuration)) {
+                  bestRoute = route;
+                  bestHotspotCount = routeHotspots.length;
+                  bestRouteDistance = totalDistance;
+                  bestRouteDuration = totalDuration;
+                }
+              } else if (routeHotspots.length < bestHotspotCount || 
+                         (routeHotspots.length === bestHotspotCount && totalDuration < bestRouteDuration)) {
                 bestRoute = route;
                 bestHotspotCount = routeHotspots.length;
+                bestRouteDistance = totalDistance;
+                bestRouteDuration = totalDuration;
               }
+              }
+            } catch (error) {
+              continue;
             }
-          } catch (error) {
-            continue;
           }
         }
       }
+    } else {
+      console.log('Skipping last resort strategies due to time limit or good route found');
     }
     
     // Return the best route found (even if not perfect) or null if nothing found
     if (bestRoute) {
-      console.log(`Returning best route found with ${bestHotspotCount} hotspots (original had ${originalHotspotCount || 'unknown'})`);
+      const isFaster = bestRouteDuration <= originalRouteDuration;
+      const isShorter = bestRouteDistance <= originalRouteDistance;
+      const timeSaved = Math.floor((originalRouteDuration - bestRouteDuration) / 60);
+      console.log(`Returning best route: ${bestHotspotCount} hotspots, ${(bestRouteDistance / 1000).toFixed(2)} km, ${Math.floor(bestRouteDuration / 60)} min (${isFaster ? `FASTER by ${Math.abs(timeSaved)} min` : 'slower'}, ${isShorter ? 'SHORTER' : 'longer'})`);
       return bestRoute;
     }
     
@@ -1214,6 +1324,12 @@ function SafeMzansiMap() {
    * Handle start location search
    */
   useEffect(() => {
+    // Don't show results if start location is already selected
+    if (startLocation) {
+      setStartResults([]);
+      return;
+    }
+    
     if (!autocompleteService.current || !startQuery.trim() || useCurrentLocation) {
       setStartResults([]);
       return;
@@ -1240,12 +1356,18 @@ function SafeMzansiMap() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [startQuery, useCurrentLocation]);
+  }, [startQuery, useCurrentLocation, startLocation]);
 
   /**
    * Handle destination search
    */
   useEffect(() => {
+    // Don't show results if destination is already selected
+    if (destination) {
+      setDestinationResults([]);
+      return;
+    }
+    
     if (!autocompleteService.current || !destinationQuery.trim()) {
       setDestinationResults([]);
       return;
@@ -1272,7 +1394,7 @@ function SafeMzansiMap() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [destinationQuery]);
+  }, [destinationQuery, destination]);
 
   /**
    * Set start location from search
@@ -1295,8 +1417,14 @@ function SafeMzansiMap() {
             name: place.name || place.formatted_address
           });
           
+          // Finalize selection - close dropdown and set query
           setStartQuery(place.name || place.formatted_address);
           setStartResults([]);
+          
+          // Ensure dropdown is closed
+          setTimeout(() => {
+            setStartResults([]);
+          }, 0);
           
           // Add start location marker
           if (startLocationMarker.current) {
@@ -1352,8 +1480,14 @@ function SafeMzansiMap() {
             name: place.name || place.formatted_address
           });
           
+          // Finalize selection - close dropdown and set query
           setDestinationQuery(place.name || place.formatted_address);
           setDestinationResults([]);
+          
+          // Ensure dropdown is closed by clearing query state immediately
+          setTimeout(() => {
+            setDestinationResults([]);
+          }, 0);
           
           // Add destination marker
           if (destinationMarker.current) {
@@ -1525,20 +1659,24 @@ function SafeMzansiMap() {
                     </button>
                   )}
                 </div>
-                {startResults.length > 0 && (
-                  <div className="search-results">
-                    {startResults.map((result) => (
-                      <div
-                        key={result.placeId}
-                        className="search-result-item"
-                        onClick={() => setStartFromSearch(result.placeId)}
-                      >
-                        <MapPin className="w-4 h-4" />
-                        <span>{result.name}</span>
-              </div>
-                    ))}
+            {startResults.length > 0 && !startLocation && (
+              <div className="search-results">
+                {startResults.map((result) => (
+                  <div
+                    key={result.placeId}
+                    className="search-result-item"
+                    onClick={() => {
+                      setStartFromSearch(result.placeId);
+                      // Immediately close dropdown
+                      setStartResults([]);
+                    }}
+                  >
+                    <MapPin className="w-4 h-4" />
+                    <span>{result.name}</span>
                   </div>
-                )}
+                ))}
+              </div>
+            )}
               </>
             )}
             {useCurrentLocation && userLocation && (
@@ -1574,19 +1712,23 @@ function SafeMzansiMap() {
                 </button>
               )}
             </div>
-            {destinationResults.length > 0 && (
+            {destinationResults.length > 0 && !destination && (
               <div className="search-results">
                 {destinationResults.map((result) => (
                   <div
                     key={result.placeId}
                     className="search-result-item"
-                    onClick={() => setDestinationFromSearch(result.placeId)}
+                    onClick={() => {
+                      setDestinationFromSearch(result.placeId);
+                      // Immediately close dropdown
+                      setDestinationResults([]);
+                    }}
                   >
                     <MapPin className="w-4 h-4" />
                     <span>{result.name}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
             )}
         </div>
 
