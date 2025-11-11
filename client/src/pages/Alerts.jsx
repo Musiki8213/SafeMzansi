@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../firebase/authContext';
 import { reportsAPI } from '../utils/api';
+import { requestNotificationPermission, notifyNewReport, isNotificationSupported } from '../utils/notifications';
 import toast from 'react-hot-toast';
 import { Bell, MapPin, Clock, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
@@ -8,7 +9,20 @@ function Alerts() {
   const { currentUser } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState(false);
   const lastAlertIdsRef = useRef(new Set()); // Track IDs of alerts we've already seen
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (isNotificationSupported()) {
+      requestNotificationPermission().then(permitted => {
+        setNotificationPermission(permitted);
+        if (permitted) {
+          console.log('Notification permission granted');
+        }
+      });
+    }
+  }, []);
 
   // Fetch reports from API
   useEffect(() => {
@@ -46,8 +60,9 @@ function Alerts() {
           );
           
           if (newAlerts.length > 0) {
-            // Show notification for new alerts
+            // Show notifications for new alerts
             newAlerts.forEach(alert => {
+              // Toast notification (in-app)
               toast.success(
                 `🚨 New ${alert.type} alert: ${alert.location}`,
                 {
@@ -60,6 +75,14 @@ function Alerts() {
                   }
                 }
               );
+              
+              // Browser notification (system notification)
+              notifyNewReport({
+                id: alert.id,
+                type: alert.type,
+                location: alert.location,
+                description: alert.description || ''
+              });
             });
           }
         }

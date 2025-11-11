@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Shield, AlertTriangle, Map as MapIcon, Users, Bell, MapPin, Loader } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
 import { reportsAPI } from '../utils/api';
+import { requestNotificationPermission, isNotificationSupported } from '../utils/notifications';
 import toast from 'react-hot-toast';
 
 function Home() {
@@ -10,6 +11,19 @@ function Home() {
   const username = currentUser?.username || currentUser?.displayName || 'User';
   const [latestAlerts, setLatestAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState(false);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (isNotificationSupported()) {
+      requestNotificationPermission().then(permitted => {
+        setNotificationPermission(permitted);
+        if (permitted) {
+          console.log('Notification permission granted');
+        }
+      });
+    }
+  }, []);
 
   // Fetch latest alerts from API
   useEffect(() => {

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { importLibrary } from '@googlemaps/js-api-loader';
-import { MapPin, Navigation, Search, X, Info, Route, AlertTriangle, CheckCircle, Loader } from 'lucide-react';
+import { MapPin, Navigation, Search, X, Info, Route, AlertTriangle, CheckCircle, Loader, Bell } from 'lucide-react';
 import { reportsAPI } from '../utils/api';
 import { initializeGoogleMaps, loadGoogleMapsLibrary, getPlacesServiceStatus } from '../utils/googleMaps';
+import { requestNotificationPermission, notifyNewReport, isNotificationSupported } from '../utils/notifications';
 import toast from 'react-hot-toast';
 
 // Default coordinates for Johannesburg, South Africa
@@ -58,6 +59,7 @@ function SafeMzansiMap() {
   const [showWarning, setShowWarning] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
   const [showRouteInfo, setShowRouteInfo] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(false);
   const startLocationMarker = useRef(null);
   
   // Refs for markers and overlays
@@ -69,6 +71,22 @@ function SafeMzansiMap() {
   const safeRouteRenderer = useRef(null);
   const userLocationMarker = useRef(null);
   const destinationMarker = useRef(null);
+
+  /**
+   * Request notification permission on mount
+   */
+  useEffect(() => {
+    if (isNotificationSupported()) {
+      requestNotificationPermission().then(permitted => {
+        setNotificationPermission(permitted);
+        if (permitted) {
+          console.log('Notification permission granted');
+        } else {
+          console.log('Notification permission denied or not requested');
+        }
+      });
+    }
+  }, []);
 
   /**
    * Initialize Google Maps - only called once
@@ -231,8 +249,9 @@ function SafeMzansiMap() {
           );
           
           if (newReports.length > 0) {
-            // Show notification for new reports
+            // Show notifications for new reports
             newReports.forEach(report => {
+              // Toast notification (in-app)
               toast.success(
                 `🚨 New ${report.type} report near ${report.title || 'your area'}`,
                 {
@@ -245,6 +264,14 @@ function SafeMzansiMap() {
                   }
                 }
               );
+              
+              // Browser notification (system notification)
+              notifyNewReport({
+                id: report.id,
+                type: report.type,
+                location: report.title || 'Unknown Location',
+                description: report.description || ''
+              });
             });
           }
         }
