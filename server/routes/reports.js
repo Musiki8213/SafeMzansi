@@ -99,11 +99,14 @@ router.post('/', verifyToken, async (req, res) => {
     const { title, description, type, location, lat, lng } = req.body;
 
     // Validation
-    if (!title || !description || !type || !location) {
+    if (!description || !type || !location) {
       return res.status(400).json({ 
-        message: 'Please provide title, description, type, and location' 
+        message: 'Please provide description, type, and location' 
       });
     }
+    
+    // Auto-generate title from type if not provided
+    const reportTitle = title && title.trim() ? title.trim() : `${type} Reported`;
 
     if (lat === undefined || lng === undefined || lat === null || lng === null) {
       return res.status(400).json({ 
@@ -130,7 +133,7 @@ router.post('/', verifyToken, async (req, res) => {
 
     // Create new report
     const reportData = {
-      title: title.trim(),
+      title: reportTitle,
       description: description.trim(),
       type: type.trim(),
       location: location.trim(),

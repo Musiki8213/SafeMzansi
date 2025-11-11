@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../firebase/authContext';
 import { reportsAPI } from '../utils/api';
 import toast from 'react-hot-toast';
@@ -8,12 +8,13 @@ function Alerts() {
   const { currentUser } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const lastAlertIdsRef = useRef(new Set()); // Track IDs of alerts we've already seen
 
   // Fetch reports from API
   useEffect(() => {
-    const fetchAlerts = async () => {
+    const fetchAlerts = async (isInitial = false) => {
       try {
-        setLoading(true);
+        if (isInitial) setLoading(true);
         const response = await reportsAPI.getReports();
         
         // Handle different response formats
@@ -38,6 +39,34 @@ function Alerts() {
             return dateB - dateA;
           });
         
+        // Check for new alerts (not in our last seen set)
+        if (!isInitial && lastAlertIdsRef.current.size > 0) {
+          const newAlerts = sortedReports.filter(alert => 
+            !lastAlertIdsRef.current.has(alert.id)
+          );
+          
+          if (newAlerts.length > 0) {
+            // Show notification for new alerts
+            newAlerts.forEach(alert => {
+              toast.success(
+                `🚨 New ${alert.type} alert: ${alert.location}`,
+                {
+                  duration: 5000,
+                  icon: '🚨',
+                  style: {
+                    background: '#DC2626',
+                    color: 'white',
+                    fontWeight: '600'
+                  }
+                }
+              );
+            });
+          }
+        }
+        
+        // Update last seen IDs
+        lastAlertIdsRef.current = new Set(sortedReports.map(alert => alert.id));
+        
         setAlerts(sortedReports);
       } catch (error) {
         console.error('Error fetching alerts:', error);
@@ -60,10 +89,10 @@ function Alerts() {
     };
 
     if (currentUser) {
-      fetchAlerts();
+      fetchAlerts(true); // Initial load
       
-      // Refresh alerts every 30 seconds
-      const interval = setInterval(fetchAlerts, 30000);
+      // Refresh alerts every 15 seconds for faster notifications
+      const interval = setInterval(() => fetchAlerts(false), 15000);
       return () => clearInterval(interval);
     } else {
       setLoading(false);

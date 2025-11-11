@@ -3,7 +3,7 @@ import { useAuth } from '../firebase/authContext';
 import { reportsAPI } from '../utils/api';
 import { initializeGoogleMaps, loadGoogleMapsLibrary, getPlacesServiceStatus } from '../utils/googleMaps';
 import toast from 'react-hot-toast';
-import { AlertTriangle, MapPin, Navigation, Search, X } from 'lucide-react';
+import { AlertTriangle, MapPin, Navigation, Search, X, Pin } from 'lucide-react';
 
 const crimeTypes = [
   'Theft',
@@ -21,7 +21,6 @@ const crimeTypes = [
 function ReportCrime() {
   const { currentUser } = useAuth();
   const [formData, setFormData] = useState({
-    title: '',
     description: '',
     type: '',
     location: '',
@@ -115,7 +114,7 @@ function ReportCrime() {
       return;
     }
 
-    setGettingLocation(true);
+      setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const location = {
@@ -131,21 +130,21 @@ function ReportCrime() {
 
         // Set marker at user location
         setMarkerPosition(location);
-        setLocationError(false);
-        setGettingLocation(false);
-
+          setLocationError(false);
+          setGettingLocation(false);
+          
         // Get address from coordinates
         reverseGeocode(location.lat, location.lng);
         toast.success('Location captured!');
-      },
-      (error) => {
-        console.error('Location access denied:', error);
-        setLocationError(true);
-        setGettingLocation(false);
+        },
+        (error) => {
+          console.error('Location access denied:', error);
+          setLocationError(true);
+          setGettingLocation(false);
         toast.info('Please select a location on the map');
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
   };
 
   /**
@@ -170,13 +169,60 @@ function ReportCrime() {
           <circle fill="white" cx="16" cy="16" r="6"/>
         </svg>
       `;
-      el.style.cssText = 'cursor: pointer; animation: pin-appear 0.5s ease-out;';
+      el.style.cssText = 'cursor: move; pointer-events: auto; animation: pin-appear 0.5s ease-out;';
+      el.style.userSelect = 'none';
 
-      // Create marker
+      // Create marker (make it draggable)
+      // Try both draggable and gmpDraggable for compatibility
       marker.current = new AdvancedMarkerElement({
         map: map.current,
         position: location,
-        content: el
+        content: el,
+        draggable: true,
+        gmpDraggable: true
+      });
+
+      // Add drag start listener for visual feedback
+      marker.current.addListener('dragstart', () => {
+        el.style.transform = 'scale(1.2)';
+        el.style.filter = 'brightness(1.3) drop-shadow(0 6px 16px rgba(220, 38, 38, 0.8))';
+      });
+
+      // Add drag end listener to update location when marker is moved
+      marker.current.addListener('dragend', () => {
+        // Reset visual feedback
+        el.style.transform = 'scale(1)';
+        el.style.filter = 'drop-shadow(0 2px 8px rgba(220, 38, 38, 0.4))';
+        
+        // Get the new position from the marker
+        const newPosition = marker.current.position;
+        let newLocation;
+        
+        if (newPosition) {
+          // Handle both LatLng object and plain object formats
+          if (typeof newPosition.lat === 'function') {
+            newLocation = {
+              lat: newPosition.lat(),
+              lng: newPosition.lng()
+            };
+          } else {
+            newLocation = {
+              lat: newPosition.lat,
+              lng: newPosition.lng
+            };
+          }
+        } else {
+          // Fallback: use the location parameter
+          newLocation = location;
+        }
+        
+        setFormData(prev => ({
+          ...prev,
+          lat: newLocation.lat,
+          lng: newLocation.lng
+        }));
+        reverseGeocode(newLocation.lat, newLocation.lng);
+        toast.success('Location updated');
       });
 
       // Update form data
@@ -203,14 +249,14 @@ function ReportCrime() {
       { location: { lat, lng } },
       (results, status) => {
         if (status === 'OK' && results[0]) {
-          setFormData(prev => ({
-            ...prev,
+    setFormData(prev => ({
+      ...prev,
             location: results[0].formatted_address
           }));
         } else {
           // Fallback to coordinates
-          setFormData(prev => ({
-            ...prev,
+    setFormData(prev => ({
+      ...prev,
             location: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
           }));
         }
@@ -294,7 +340,7 @@ function ReportCrime() {
       return;
     }
 
-    if (!formData.title || !formData.description || !formData.type) {
+    if (!formData.description || !formData.type) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -308,7 +354,7 @@ function ReportCrime() {
     
     try {
       await reportsAPI.submitReport(
-        formData.title,
+        null, // No title - will be auto-generated from type
         formData.description,
         formData.type,
         formData.location || `${formData.lat}, ${formData.lng}`,
@@ -320,7 +366,6 @@ function ReportCrime() {
       
       // Reset form
       setFormData({
-        title: '',
         description: '',
         type: '',
         location: '',
@@ -351,15 +396,15 @@ function ReportCrime() {
     <div className="page">
       <div className="container">
         <div className="card glassy-card mb-6">
-          <div className="flex flex-items-center mb-6">
-            <div className="icon-wrapper icon-wrapper-cyan mr-4">
-              <AlertTriangle className="w-8 h-8" />
-            </div>
-            <div>
-              <h1>Report Crime</h1>
-              <p className="text-gray-600">Help keep your community safe</p>
-            </div>
+        <div className="flex flex-items-center mb-6">
+          <div className="icon-wrapper icon-wrapper-cyan mr-4">
+            <AlertTriangle className="w-8 h-8" />
           </div>
+          <div>
+            <h1>Report Crime</h1>
+            <p className="text-gray-600">Help keep your community safe</p>
+          </div>
+        </div>
 
           {locationError && !gettingLocation && (
             <div className="alert alert-info mb-4">
@@ -367,49 +412,37 @@ function ReportCrime() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Title *</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="form-input"
-                placeholder="Brief title for the incident"
-                required
-              />
-            </div>
-
-            <div className="form-group">
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
               <label className="form-label">Crime Type *</label>
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="form-select"
-                required
-              >
-                <option value="">Select a crime type</option>
-                {crimeTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              className="form-select"
+              required
+            >
+              <option value="">Select a crime type</option>
+              {crimeTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="form-group">
+          <div className="form-group">
               <label className="form-label">Description *</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={4}
-                className="form-textarea"
-                placeholder="Describe what you witnessed..."
-                required
-              />
-            </div>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={4}
+              className="form-textarea"
+              placeholder="Describe what you witnessed..."
+              required
+            />
+          </div>
 
-            <div className="form-group">
+          <div className="form-group">
               <label className="form-label">Location *</label>
               
               {/* Places Autocomplete Search */}
@@ -462,7 +495,7 @@ function ReportCrime() {
                 </div>
               )}
 
-              {/* Location Display and Get Current Location Button */}
+              {/* Location Display and Action Buttons */}
               <div className="flex flex-items-center flex-gap mb-3">
                 <input
                   type="text"
@@ -475,10 +508,30 @@ function ReportCrime() {
                 />
                 <button
                   type="button"
+                  onClick={() => {
+                    if (map.current) {
+                      const center = map.current.getCenter();
+                      const location = {
+                        lat: center.lat(),
+                        lng: center.lng()
+                      };
+                      setMarkerPosition(location);
+                      toast.success('Pin dropped at map center');
+                    }
+                  }}
+                  className="btn btn-secondary"
+                  title="Pin location at map center"
+                  style={{ minWidth: 'auto', padding: '0.5rem' }}
+                >
+                  <Pin className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
                   onClick={getCurrentLocation}
                   disabled={gettingLocation}
                   className="btn btn-secondary"
                   title="Use my current location"
+                  style={{ minWidth: 'auto', padding: '0.5rem' }}
                 >
                   <Navigation className="w-5 h-5" />
                   {gettingLocation ? '...' : ''}
@@ -503,19 +556,19 @@ function ReportCrime() {
               <div className="report-map-container" style={{ marginTop: '0.5rem' }}>
                 <div ref={mapContainer} style={{ height: '400px', width: '100%', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }} />
                 <p className="text-xs text-gray-500 mt-2">
-                  Click anywhere on the map to set the location
+                  Click anywhere on the map to set the location, or use the pin button to drop a pin at the map center. You can drag the pin to adjust the location.
                 </p>
-              </div>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary btn-full-width"
-            >
-              {loading ? 'Submitting...' : 'Submit Report'}
-            </button>
-          </form>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary btn-full-width"
+          >
+            {loading ? 'Submitting...' : 'Submit Report'}
+          </button>
+        </form>
         </div>
       </div>
     </div>

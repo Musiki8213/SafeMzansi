@@ -100,7 +100,7 @@ function SafeMzansiMap() {
         // Note: When mapId is present, styles must be set in Google Cloud Console, not here
         // Remove mapId if you want to use custom styles, or remove styles if using mapId
         const mapOptions = {
-          center: DEFAULT_CENTER,
+      center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
           disableDefaultUI: false,
           zoomControl: true,
@@ -184,6 +184,8 @@ function SafeMzansiMap() {
     };
   }, []); // Empty dependency array - only run once
 
+  const lastReportIdsRef = useRef(new Set()); // Track IDs of reports we've already seen
+
   /**
    * Fetch crime reports from API
    * Handles missing backend gracefully
@@ -214,12 +216,41 @@ function SafeMzansiMap() {
           })
           .map(report => ({
             id: report.id || report._id || `report_${Date.now()}_${Math.random()}`,
-            title: report.title || 'Crime Report',
+            title: report.title || `${report.type || 'Crime'} Report`,
             description: report.description || '',
+            type: report.type || 'Crime',
             createdAt: report.createdAt || report.date || new Date().toISOString(),
             lat: parseFloat(report.lat),
             lng: parseFloat(report.lng)
           }));
+        
+        // Check for new reports (not in our last seen set)
+        if (!showToast && lastReportIdsRef.current.size > 0) {
+          const newReports = validReports.filter(report => 
+            !lastReportIdsRef.current.has(report.id)
+          );
+          
+          if (newReports.length > 0) {
+            // Show notification for new reports
+            newReports.forEach(report => {
+              toast.success(
+                `🚨 New ${report.type} report near ${report.title || 'your area'}`,
+                {
+                  duration: 5000,
+                  icon: '🚨',
+                  style: {
+                    background: '#DC2626',
+                    color: 'white',
+                    fontWeight: '600'
+                  }
+                }
+              );
+            });
+          }
+        }
+        
+        // Update last seen IDs
+        lastReportIdsRef.current = new Set(validReports.map(report => report.id));
         
         console.log('Loaded reports:', validReports);
         console.log(`Total valid reports: ${validReports.length}`);
@@ -244,7 +275,7 @@ function SafeMzansiMap() {
           }
           setReports([]);
         } else {
-          if (!showToast) {
+        if (!showToast) {
             console.error('Error fetching reports:', error);
             toast.error('Failed to load crime reports');
           }
@@ -258,10 +289,10 @@ function SafeMzansiMap() {
     // Initial fetch
     fetchReports();
 
-    // Set up periodic polling every 30 seconds for real-time updates
+    // Set up periodic polling every 15 seconds for faster real-time updates
     const pollInterval = setInterval(() => {
-      fetchReports(true); // Don't show loading/toasts on polling
-    }, 30000);
+      fetchReports(true); // Don't show loading/toasts on polling, but show new report notifications
+    }, 15000);
 
     return () => clearInterval(pollInterval);
   }, []);
@@ -575,6 +606,22 @@ function SafeMzansiMap() {
   };
 
   /**
+   * Check if a location is far enough from all hotspots
+   */
+  const isLocationSafe = (location, hotspots, minDistance = 1000) => {
+    for (const hotspot of hotspots) {
+      const distance = calculateDistance(
+        location.lat, location.lng,
+        hotspot.lat, hotspot.lng
+      );
+      if (distance < minDistance) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  /**
    * Calculate route with waypoints to avoid hotspots
    * Tries multiple aggressive strategies to find a route that avoids all hotspots
    * Will accept longer routes as long as they avoid hotspots
@@ -585,7 +632,8 @@ function SafeMzansiMap() {
     console.log(`Attempting to find safe route avoiding ${hotspots.length} hotspots...`);
     
     // Create waypoints in multiple directions around each hotspot
-    const createAvoidanceWaypoints = (hotspots, offsetDistance, directionIndex = 0) => {
+    // Only use waypoints that are verified to be far enough from hotspots
+    const createAvoidanceWaypoints = (hotspots, offsetDistance, directionIndex = 0, minSafeDistance = 1000) => {
       const waypoints = [];
       const usedHotspots = new Set();
       
@@ -604,53 +652,95 @@ function SafeMzansiMap() {
       hotspots.forEach((hotspot, idx) => {
         if (usedHotspots.has(hotspot.id)) return;
         
-        // Try different directions for different hotspots to spread them out
-        const dirIndex = (directionIndex + idx) % directions.length;
-        const direction = directions[dirIndex];
-        
-        const waypoint = {
-          location: {
+        // Try all 8 directions to find a safe waypoint
+        let foundSafe = false;
+        for (let dirOffset = 0; dirOffset < 8; dirOffset++) {
+          const dirIndex = (directionIndex + dirOffset) % directions.length;
+          const direction = directions[dirIndex];
+          
+          const waypointLocation = {
             lat: hotspot.lat + direction.lat,
             lng: hotspot.lng + direction.lng
-          },
-          stopover: false
-        };
+          };
+          
+          // Verify this waypoint is safe (far enough from all hotspots)
+          if (isLocationSafe(waypointLocation, hotspots, minSafeDistance)) {
+            waypoints.push({
+              location: waypointLocation,
+              stopover: false
+            });
+            usedHotspots.add(hotspot.id);
+            foundSafe = true;
+            break;
+          }
+        }
         
-        waypoints.push(waypoint);
-        usedHotspots.add(hotspot.id);
+        // If no safe waypoint found in 8 directions, try with larger offset
+        if (!foundSafe) {
+          // Try with 2x the offset
+          const largerOffset = offsetDistance * 2;
+          for (let dirOffset = 0; dirOffset < 8; dirOffset++) {
+            const dirIndex = (directionIndex + dirOffset) % directions.length;
+            const direction = directions[dirIndex];
+            
+            const waypointLocation = {
+              lat: hotspot.lat + (direction.lat * 2),
+              lng: hotspot.lng + (direction.lng * 2)
+            };
+            
+            if (isLocationSafe(waypointLocation, hotspots, minSafeDistance)) {
+              waypoints.push({
+                location: waypointLocation,
+                stopover: false
+              });
+              usedHotspots.add(hotspot.id);
+              foundSafe = true;
+              break;
+            }
+          }
+        }
       });
       
       return waypoints;
     };
     
     // Try multiple strategies with increasing offset distances and different approaches
+    // Also increase minimum safe distance requirement
     const strategies = [
-      // Small offsets
-      { offset: 0.02, avoidHighways: false, direction: 0 },   // ~2km
-      { offset: 0.02, avoidHighways: true, direction: 0 },    // ~2km, avoid highways
-      { offset: 0.02, avoidHighways: false, direction: 2 },   // ~2km, different direction
-      { offset: 0.02, avoidHighways: true, direction: 2 },   // ~2km, avoid highways, different direction
+      // Small offsets with 1km safe distance
+      { offset: 0.02, avoidHighways: false, direction: 0, minSafe: 1000 },   // ~2km
+      { offset: 0.02, avoidHighways: true, direction: 0, minSafe: 1000 },    // ~2km, avoid highways
+      { offset: 0.02, avoidHighways: false, direction: 2, minSafe: 1000 },   // ~2km, different direction
+      { offset: 0.02, avoidHighways: true, direction: 2, minSafe: 1000 },   // ~2km, avoid highways, different direction
       
-      // Medium offsets
-      { offset: 0.03, avoidHighways: false, direction: 0 },   // ~3km
-      { offset: 0.03, avoidHighways: true, direction: 0 },    // ~3km, avoid highways
-      { offset: 0.03, avoidHighways: false, direction: 4 },   // ~3km, different direction
-      { offset: 0.03, avoidHighways: true, direction: 4 },   // ~3km, avoid highways, different direction
+      // Medium offsets with 1.5km safe distance
+      { offset: 0.03, avoidHighways: false, direction: 0, minSafe: 1500 },   // ~3km
+      { offset: 0.03, avoidHighways: true, direction: 0, minSafe: 1500 },    // ~3km, avoid highways
+      { offset: 0.03, avoidHighways: false, direction: 4, minSafe: 1500 },   // ~3km, different direction
+      { offset: 0.03, avoidHighways: true, direction: 4, minSafe: 1500 },   // ~3km, avoid highways, different direction
       
-      // Large offsets
-      { offset: 0.05, avoidHighways: false, direction: 0 },   // ~5km
-      { offset: 0.05, avoidHighways: true, direction: 0 },    // ~5km, avoid highways
-      { offset: 0.05, avoidHighways: false, direction: 2 },   // ~5km, different direction
-      { offset: 0.05, avoidHighways: true, direction: 2 },    // ~5km, avoid highways, different direction
+      // Large offsets with 2km safe distance
+      { offset: 0.05, avoidHighways: false, direction: 0, minSafe: 2000 },   // ~5km
+      { offset: 0.05, avoidHighways: true, direction: 0, minSafe: 2000 },    // ~5km, avoid highways
+      { offset: 0.05, avoidHighways: false, direction: 2, minSafe: 2000 },   // ~5km, different direction
+      { offset: 0.05, avoidHighways: true, direction: 2, minSafe: 2000 },    // ~5km, avoid highways, different direction
       
-      // Very large offsets
-      { offset: 0.08, avoidHighways: false, direction: 0 },   // ~8km
-      { offset: 0.08, avoidHighways: true, direction: 0 },    // ~8km, avoid highways
+      // Very large offsets with 3km safe distance
+      { offset: 0.08, avoidHighways: false, direction: 0, minSafe: 3000 },   // ~8km
+      { offset: 0.08, avoidHighways: true, direction: 0, minSafe: 3000 },    // ~8km, avoid highways
+      { offset: 0.1, avoidHighways: false, direction: 0, minSafe: 3000 },   // ~10km
+      { offset: 0.1, avoidHighways: true, direction: 0, minSafe: 3000 },    // ~10km, avoid highways
     ];
     
     // Try each strategy
     for (const strategy of strategies) {
-      const waypoints = createAvoidanceWaypoints(hotspots, strategy.offset, strategy.direction);
+      const waypoints = createAvoidanceWaypoints(hotspots, strategy.offset, strategy.direction, strategy.minSafe);
+      
+      // Skip if we couldn't create safe waypoints
+      if (waypoints.length === 0) {
+        console.log(`Strategy (offset: ${strategy.offset}) - no safe waypoints found`);
+        continue;
+      }
       
       try {
         const route = await new Promise((resolve) => {
@@ -662,7 +752,7 @@ function SafeMzansiMap() {
               travelMode: window.google.maps.TravelMode.DRIVING,
               avoidHighways: strategy.avoidHighways,
               avoidTolls: false,
-              optimizeWaypoints: true
+              optimizeWaypoints: false // Don't optimize - we want to follow our waypoints exactly
             },
             (result, status) => {
               if (status === window.google.maps.DirectionsStatus.OK) {
@@ -677,7 +767,7 @@ function SafeMzansiMap() {
         if (route) {
           // Check if this route actually avoids hotspots
           const routeHotspots = checkRouteForHotspots(route);
-          console.log(`Strategy (offset: ${strategy.offset}, avoidHighways: ${strategy.avoidHighways}) found route with ${routeHotspots.length} hotspots`);
+          console.log(`Strategy (offset: ${strategy.offset}, avoidHighways: ${strategy.avoidHighways}, minSafe: ${strategy.minSafe}m) found route with ${routeHotspots.length} hotspots`);
           
           // Only accept if it has ZERO hotspots
           if (routeHotspots.length === 0) {
@@ -704,70 +794,76 @@ function SafeMzansiMap() {
       const nw = { lat: ne.lat(), lng: sw.lng() };
       const se = { lat: sw.lat(), lng: ne.lng() };
       
-      // Try multiple bounding box strategies
-      const boundingBoxStrategies = [
-        // Go around the north side
-        [
-          { location: { lat: ne.lat() + 0.02, lng: center.lng() }, stopover: false },
-          { location: { lat: ne.lat() + 0.02, lng: ne.lng() + 0.02 }, stopover: false }
-        ],
-        // Go around the south side
-        [
-          { location: { lat: sw.lat() - 0.02, lng: center.lng() }, stopover: false },
-          { location: { lat: sw.lat() - 0.02, lng: sw.lng() - 0.02 }, stopover: false }
-        ],
-        // Go around the east side
-        [
-          { location: { lat: center.lat(), lng: ne.lng() + 0.02 }, stopover: false },
-          { location: { lat: ne.lat() + 0.02, lng: ne.lng() + 0.02 }, stopover: false }
-        ],
-        // Go around the west side
-        [
-          { location: { lat: center.lat(), lng: sw.lng() - 0.02 }, stopover: false },
-          { location: { lat: sw.lat() - 0.02, lng: sw.lng() - 0.02 }, stopover: false }
-        ],
-        // Large detour - far around
-        [
-          { location: { lat: ne.lat() + 0.05, lng: center.lng() }, stopover: false },
-          { location: { lat: sw.lat() - 0.05, lng: center.lng() }, stopover: false }
-        ],
-      ];
+      // Try multiple bounding box strategies with verified safe waypoints
+      const boundingBoxOffsets = [0.03, 0.05, 0.08, 0.1, 0.15]; // Increasing distances
       
-      for (const waypoints of boundingBoxStrategies) {
-        try {
-          const route = await new Promise((resolve) => {
-            directionsService.current.route(
-              {
-                origin: origin,
-                destination: dest,
-                waypoints: waypoints,
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                avoidHighways: false,
-                avoidTolls: false,
-                optimizeWaypoints: true
-              },
-              (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK) {
-                  resolve(result);
-                } else {
-                  resolve(null);
-                }
-              }
-            );
-          });
+      for (const offset of boundingBoxOffsets) {
+        const strategies = [
+          // Go around the north side
+          [
+            { location: { lat: ne.lat() + offset, lng: center.lng() }, stopover: false },
+            { location: { lat: ne.lat() + offset, lng: ne.lng() + offset }, stopover: false }
+          ],
+          // Go around the south side
+          [
+            { location: { lat: sw.lat() - offset, lng: center.lng() }, stopover: false },
+            { location: { lat: sw.lat() - offset, lng: sw.lng() - offset }, stopover: false }
+          ],
+          // Go around the east side
+          [
+            { location: { lat: center.lat(), lng: ne.lng() + offset }, stopover: false },
+            { location: { lat: ne.lat() + offset, lng: ne.lng() + offset }, stopover: false }
+          ],
+          // Go around the west side
+          [
+            { location: { lat: center.lat(), lng: sw.lng() - offset }, stopover: false },
+            { location: { lat: sw.lat() - offset, lng: sw.lng() - offset }, stopover: false }
+          ],
+        ];
+        
+        for (const waypoints of strategies) {
+          // Verify all waypoints are safe
+          const allSafe = waypoints.every(wp => 
+            isLocationSafe(wp.location, hotspots, 2000) // At least 2km from hotspots
+          );
           
-          if (route) {
-            const routeHotspots = checkRouteForHotspots(route);
-            console.log(`Bounding box strategy found route with ${routeHotspots.length} hotspots`);
+          if (!allSafe) continue;
+          
+          try {
+            const route = await new Promise((resolve) => {
+              directionsService.current.route(
+                {
+                  origin: origin,
+                  destination: dest,
+                  waypoints: waypoints,
+                  travelMode: window.google.maps.TravelMode.DRIVING,
+                  avoidHighways: false,
+                  avoidTolls: false,
+                  optimizeWaypoints: false // Don't optimize - follow waypoints
+                },
+                (result, status) => {
+                  if (status === window.google.maps.DirectionsStatus.OK) {
+                    resolve(result);
+    } else {
+                    resolve(null);
+                  }
+                }
+              );
+            });
             
-            if (routeHotspots.length === 0) {
-              console.log('Found safe route using bounding box strategy!');
-              return route;
+            if (route) {
+              const routeHotspots = checkRouteForHotspots(route);
+              console.log(`Bounding box strategy (offset: ${offset}) found route with ${routeHotspots.length} hotspots`);
+              
+              if (routeHotspots.length === 0) {
+                console.log('Found safe route using bounding box strategy!');
+                return route;
+              }
             }
+          } catch (error) {
+            console.error('Error with bounding box strategy:', error);
+            continue;
           }
-        } catch (error) {
-          console.error('Error with bounding box strategy:', error);
-          continue;
         }
       }
     } catch (error) {
@@ -775,46 +871,53 @@ function SafeMzansiMap() {
     }
     
     // Last resort: Try with very large waypoints in all directions
+    // Use even larger minimum safe distances
     console.log('Trying last resort: very large waypoints...');
-    const lastResortOffsets = [0.1, 0.15, 0.2]; // 10km, 15km, 20km
+    const lastResortOffsets = [0.15, 0.2, 0.25, 0.3]; // 15km, 20km, 25km, 30km
+    const lastResortMinSafe = [3000, 4000, 5000]; // 3km, 4km, 5km minimum distance
     
-    for (const offset of lastResortOffsets) {
-      for (let dir = 0; dir < 8; dir++) {
-        const waypoints = createAvoidanceWaypoints(hotspots, offset, dir);
-        
-        try {
-          const route = await new Promise((resolve) => {
-            directionsService.current.route(
-              {
-                origin: origin,
-                destination: dest,
-                waypoints: waypoints.length > 0 ? waypoints : undefined,
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                avoidHighways: false,
-                avoidTolls: false,
-                optimizeWaypoints: true
-              },
-              (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK) {
-                  resolve(result);
-                } else {
-                  resolve(null);
-                }
-              }
-            );
-          });
+    for (const minSafe of lastResortMinSafe) {
+      for (const offset of lastResortOffsets) {
+        for (let dir = 0; dir < 8; dir++) {
+          const waypoints = createAvoidanceWaypoints(hotspots, offset, dir, minSafe);
           
-          if (route) {
-            const routeHotspots = checkRouteForHotspots(route);
-            console.log(`Last resort (offset: ${offset}, dir: ${dir}) found route with ${routeHotspots.length} hotspots`);
+          // Skip if no safe waypoints
+          if (waypoints.length === 0) continue;
+          
+          try {
+            const route = await new Promise((resolve) => {
+              directionsService.current.route(
+                {
+                  origin: origin,
+                  destination: dest,
+                  waypoints: waypoints.length > 0 ? waypoints : undefined,
+                  travelMode: window.google.maps.TravelMode.DRIVING,
+                  avoidHighways: false,
+                  avoidTolls: false,
+                  optimizeWaypoints: false // Don't optimize - follow waypoints exactly
+                },
+                (result, status) => {
+                  if (status === window.google.maps.DirectionsStatus.OK) {
+                    resolve(result);
+                  } else {
+                    resolve(null);
+                  }
+                }
+              );
+            });
             
-            if (routeHotspots.length === 0) {
-              console.log('Found safe route using last resort strategy!');
-              return route;
+            if (route) {
+              const routeHotspots = checkRouteForHotspots(route);
+              console.log(`Last resort (offset: ${offset}, dir: ${dir}, minSafe: ${minSafe}m) found route with ${routeHotspots.length} hotspots`);
+              
+              if (routeHotspots.length === 0) {
+                console.log('Found safe route using last resort strategy!');
+                return route;
+              }
             }
+          } catch (error) {
+            continue;
           }
-        } catch (error) {
-          continue;
         }
       }
     }
@@ -845,7 +948,7 @@ function SafeMzansiMap() {
       toast.error('Please set your start location and destination');
       return;
     }
-    
+
     setRouting(true);
     
     // Clear previous routes
@@ -1055,7 +1158,7 @@ function SafeMzansiMap() {
             setDestinationResults(predictions.map(prediction => ({
               placeId: prediction.place_id,
               name: prediction.description
-            })));
+          })));
           } else {
             setDestinationResults([]);
           }
@@ -1212,8 +1315,8 @@ function SafeMzansiMap() {
           </div>
         )}
 
-        {/* Search Bar - Moved to right side */}
-        <div className="map-search-bar glassy-overlay" style={{ top: '20px', right: '20px', left: 'auto', width: '350px' }}>
+        {/* Search Bar - Centered, slightly to the right */}
+        <div className="map-search-bar glassy-overlay" style={{ top: '20px', left: '50%', transform: 'translateX(-30%)', right: 'auto', width: '350px' }}>
           <div className="search-input-wrapper">
             <Search className="search-icon" />
             <input
@@ -1254,19 +1357,19 @@ function SafeMzansiMap() {
         </div>
 
         {/* Route Planning Panel */}
-        <div className="route-planning-panel glassy-overlay" style={{ top: '80px', left: '20px', right: 'auto', width: '350px' }}>
+        <div className="route-planning-panel glassy-overlay" style={{ top: '20px', left: '20px', right: 'auto', width: '350px' }}>
           <div className="route-planning-header">
             <Route className="w-5 h-5" style={{ color: '#3B82F6' }} />
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Plan Route</h3>
             {(destination || startLocation || userLocation) && (
-              <button
+            <button
                 onClick={clearRoutes}
                 className="search-clear"
                 style={{ marginLeft: 'auto' }}
                 title="Clear route"
               >
                 <X className="w-4 h-4" />
-              </button>
+            </button>
             )}
           </div>
 
@@ -1276,7 +1379,7 @@ function SafeMzansiMap() {
               Start Location
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <input
+                  <input
                 type="checkbox"
                 id="useCurrentLocation"
                 checked={useCurrentLocation}
@@ -1327,7 +1430,7 @@ function SafeMzansiMap() {
                       >
                         <MapPin className="w-4 h-4" />
                         <span>{result.name}</span>
-                      </div>
+              </div>
                     ))}
                   </div>
                 )}
@@ -1338,7 +1441,7 @@ function SafeMzansiMap() {
                 ✓ Using current location
               </div>
             )}
-          </div>
+              </div>
 
           {/* Destination */}
           <div className="route-input-section" style={{ marginTop: '1rem' }}>
@@ -1376,12 +1479,12 @@ function SafeMzansiMap() {
                   >
                     <MapPin className="w-4 h-4" />
                     <span>{result.name}</span>
-                  </div>
-                ))}
               </div>
-            )}
+            ))}
           </div>
-          
+            )}
+        </div>
+
           {routing && (
             <div className="routing-indicator" style={{ padding: '0.5rem', textAlign: 'center', color: '#666', marginTop: '1rem' }}>
               <Loader className="w-4 h-4 animate-spin inline mr-2" />
@@ -1392,18 +1495,18 @@ function SafeMzansiMap() {
 
         {/* Map Controls */}
         <div className="map-controls glassy-overlay">
-            <button
-            onClick={centerOnUser}
+        <button
+          onClick={centerOnUser}
             className="control-btn"
-            title="Center on my location"
-          >
-            <Navigation className="w-5 h-5" />
+          title="Center on my location"
+        >
+          <Navigation className="w-5 h-5" />
             <span>My Location</span>
-                </button>
+        </button>
         </div>
 
-        {/* Legend */}
-        <div className="map-legend glassy-overlay">
+        {/* Legend - Moved to right side, slightly to the left */}
+        <div className="map-legend glassy-overlay" style={{ top: '20px', right: '100px', left: 'auto', bottom: 'auto' }}>
           <div className="legend-header">
             <Info className="legend-icon" />
             <h4>Hotspots</h4>
@@ -1492,7 +1595,7 @@ function SafeMzansiMap() {
                 )}
               </div>
               <div className="warning-actions">
-                <button
+            <button
                   onClick={() => setShowWarning(false)}
                   className="btn btn-primary"
                   style={{ width: '100%' }}
@@ -1511,8 +1614,8 @@ function SafeMzansiMap() {
               <CheckCircle className="w-5 h-5" style={{ color: '#10B981' }} />
               <h4>Safe Route</h4>
               <button onClick={() => setShowRouteInfo(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X className="w-4 h-4" />
-              </button>
+              <X className="w-4 h-4" />
+            </button>
             </div>
             <div className="route-info-content">
               <div className="route-stat">
