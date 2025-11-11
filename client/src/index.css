@@ -1565,10 +1565,23 @@ p {
   }
 }
 
-/* Destination Search Bar */
-.destination-search-bar {
+/* Route Planning Panel */
+.route-planning-panel {
   position: absolute;
   z-index: 10;
+}
+
+.route-planning-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.route-input-section {
+  margin-bottom: 0.75rem;
 }
 
 /* Warning Modal */
