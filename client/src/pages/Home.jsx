@@ -1,35 +1,69 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, AlertTriangle, Map as MapIcon, TrendingUp, Users, Bell, Clock, MapPin } from 'lucide-react';
+import { Shield, AlertTriangle, Map as MapIcon, Users, Bell, MapPin, Loader } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
-
-// Mock data for latest alerts
-const mockLatestAlerts = [
-  {
-    id: 1,
-    type: 'Theft',
-    location: 'Johannesburg CBD',
-    time: '2 hours ago',
-    description: 'Vehicle break-in reported near Main Street'
-  },
-  {
-    id: 2,
-    type: 'Suspicious Activity',
-    location: 'Cape Town Central',
-    time: '5 hours ago',
-    description: 'Unusual activity reported in the area'
-  },
-  {
-    id: 3,
-    type: 'Robbery',
-    location: 'Durban North',
-    time: '8 hours ago',
-    description: 'Incident reported and verified by community'
-  }
-];
+import { reportsAPI } from '../utils/api';
+import toast from 'react-hot-toast';
 
 function Home() {
   const { currentUser } = useAuth();
   const username = currentUser?.username || currentUser?.displayName || 'User';
+  const [latestAlerts, setLatestAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch latest alerts from API
+  useEffect(() => {
+    const fetchLatestAlerts = async () => {
+      try {
+        setLoading(true);
+        const response = await reportsAPI.getReports();
+        
+        // Handle different response formats
+        const reportsData = response.reports || response.data || response || [];
+        
+        // Sort by createdAt (newest first) and take the latest 6
+        const sortedReports = reportsData
+          .map(report => ({
+            id: report.id || report._id,
+            type: report.type || 'Crime',
+            location: report.location || 'Unknown Location',
+            description: report.description || 'No description',
+            timestamp: report.createdAt || report.timestamp || new Date().toISOString(),
+            verified: report.verified || false,
+            username: report.username || 'Anonymous'
+          }))
+          .sort((a, b) => {
+            // Sort by timestamp, newest first
+            const dateA = new Date(a.timestamp).getTime();
+            const dateB = new Date(b.timestamp).getTime();
+            return dateB - dateA;
+          })
+          .slice(0, 6); // Get latest 6 alerts
+        
+        setLatestAlerts(sortedReports);
+      } catch (error) {
+        console.error('Error fetching latest alerts:', error);
+        // Handle gracefully - show empty state if backend is not available
+        if (error.message.includes('Network error') || 
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('404') ||
+            error.message.includes('Route not found')) {
+          setLatestAlerts([]);
+        } else {
+          toast.error('Failed to load latest alerts');
+          setLatestAlerts([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestAlerts();
+    
+    // Refresh alerts every 30 seconds
+    const interval = setInterval(fetchLatestAlerts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="page">
@@ -60,67 +94,61 @@ function Home() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-3 mb-8">
-        <div className="card glassy-card">
-          <div className="flex flex-items-center flex-between">
-            <div>
-              <p className="text-gray-600 mb-1">Reports Today</p>
-              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>1,234</div>
-            </div>
-            <div className="icon-wrapper icon-wrapper-primary">
-              <TrendingUp className="w-8 h-8" />
-            </div>
-          </div>
-        </div>
-
-        <div className="card glassy-card">
-          <div className="flex flex-items-center flex-between">
-            <div>
-              <p className="text-gray-600 mb-1">Active Users</p>
-              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>5,678</div>
-            </div>
-            <div className="icon-wrapper icon-wrapper-cyan">
-              <Users className="w-8 h-8" />
-            </div>
-          </div>
-        </div>
-
-        <div className="card glassy-card">
-          <div className="flex flex-items-center flex-between">
-            <div>
-              <p className="text-gray-600 mb-1">Verified Reports</p>
-              <div className="text-3xl font-bold" style={{ color: 'var(--primary-blue)' }}>89%</div>
-            </div>
-            <div className="icon-wrapper icon-wrapper-primary">
-              <Shield className="w-8 h-8" />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Latest Alerts */}
       <div className="mb-8">
         <div className="flex flex-items-center mb-4">
           <Bell className="w-6 h-6 mr-2" style={{ color: 'var(--primary-blue)' }} />
           <h2>Latest Alerts</h2>
         </div>
-        <div className="grid grid-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {mockLatestAlerts.map((alert) => (
-            <div key={alert.id} className="card glassy-card">
-              <div className="flex flex-items-center flex-between mb-3">
-                <span className="badge badge-danger">{alert.type}</span>
-                <span className="text-xs text-gray-500">{alert.time}</span>
-              </div>
-              <h3 className="mb-2">{alert.type}</h3>
-              <p className="text-sm text-gray-600 mb-3">{alert.description}</p>
-              <div className="flex flex-items-center text-xs text-gray-500">
-                <MapPin className="w-4 h-4 mr-1" />
-                <span>{alert.location}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex flex-items-center justify-center py-8">
+            <Loader className="w-8 h-8 animate-spin" style={{ color: 'var(--primary-blue)' }} />
+          </div>
+        ) : latestAlerts.length === 0 ? (
+          <div className="card glassy-card text-center py-8">
+            <Bell className="w-12 h-12 mx-auto mb-4" style={{ color: '#999' }} />
+            <p className="text-gray-600">No alerts available at the moment</p>
+          </div>
+        ) : (
+          <div className="grid grid-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {latestAlerts.map((alert) => {
+              // Calculate time ago
+              const timeAgo = (() => {
+                const now = new Date();
+                const alertTime = new Date(alert.timestamp);
+                const diffMs = now - alertTime;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+                if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+              })();
+
+              return (
+                <div key={alert.id} className="card glassy-card">
+                  <div className="flex flex-items-center flex-between mb-3">
+                    <span className={`badge ${alert.verified ? 'badge-success' : 'badge-danger'}`}>
+                      {alert.type}
+                    </span>
+                    <span className="text-xs text-gray-500">{timeAgo}</span>
+                  </div>
+                  <h3 className="mb-2">{alert.type}</h3>
+                  <p className="text-sm text-gray-600 mb-3">{alert.description}</p>
+                  <div className="flex flex-items-center flex-between">
+                    <div className="flex flex-items-center text-xs text-gray-500">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      <span>{alert.location}</span>
+                    </div>
+                    <span className="text-xs text-gray-400">by {alert.username}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Features Grid */}

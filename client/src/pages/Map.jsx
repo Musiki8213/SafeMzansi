@@ -626,16 +626,19 @@ function SafeMzansiMap() {
    * Tries multiple aggressive strategies to find a route that avoids all hotspots
    * Will accept longer routes as long as they avoid hotspots
    */
-  const calculateSafeRoute = async (origin, dest, hotspots) => {
+  const calculateSafeRoute = async (origin, dest, hotspots, originalHotspotCount = null) => {
     if (!directionsService.current || !hotspots.length) return null;
     
     console.log(`Attempting to find safe route avoiding ${hotspots.length} hotspots...`);
+    let bestRoute = null;
+    let bestHotspotCount = originalHotspotCount || Infinity;
     
     // Create waypoints in multiple directions around each hotspot
     // Only use waypoints that are verified to be far enough from hotspots
-    const createAvoidanceWaypoints = (hotspots, offsetDistance, directionIndex = 0, minSafeDistance = 1000) => {
+    const createAvoidanceWaypoints = (hotspots, offsetDistance, directionIndex = 0, minSafeDistance = 1000, originPoint = null) => {
       const waypoints = [];
       const usedHotspots = new Set();
+      const MAX_WAYPOINTS = 23; // Google Maps allows max 25 waypoints, but we'll use 23 to be safe
       
       // 8 directions: N, NE, E, SE, S, SW, W, NW
       const directions = [
@@ -649,8 +652,21 @@ function SafeMzansiMap() {
         { lat: offsetDistance, lng: -offsetDistance }  // Northwest
       ];
       
-      hotspots.forEach((hotspot, idx) => {
-        if (usedHotspots.has(hotspot.id)) return;
+      // Only process hotspots that are between origin and destination
+      // This reduces the number of waypoints needed
+      let sortedHotspots = [...hotspots];
+      
+      // Sort by distance from origin to prioritize closer hotspots (if origin is provided)
+      if (originPoint) {
+        sortedHotspots = sortedHotspots.sort((a, b) => {
+          const distA = calculateDistance(originPoint.lat, originPoint.lng, a.lat, a.lng);
+          const distB = calculateDistance(originPoint.lat, originPoint.lng, b.lat, b.lng);
+          return distA - distB;
+        });
+      }
+      
+      for (const hotspot of sortedHotspots) {
+        if (usedHotspots.has(hotspot.id) || waypoints.length >= MAX_WAYPOINTS) break;
         
         // Try all 8 directions to find a safe waypoint
         let foundSafe = false;
@@ -676,9 +692,8 @@ function SafeMzansiMap() {
         }
         
         // If no safe waypoint found in 8 directions, try with larger offset
-        if (!foundSafe) {
+        if (!foundSafe && waypoints.length < MAX_WAYPOINTS) {
           // Try with 2x the offset
-          const largerOffset = offsetDistance * 2;
           for (let dirOffset = 0; dirOffset < 8; dirOffset++) {
             const dirIndex = (directionIndex + dirOffset) % directions.length;
             const direction = directions[dirIndex];
@@ -699,8 +714,9 @@ function SafeMzansiMap() {
             }
           }
         }
-      });
+      }
       
+      console.log(`Created ${waypoints.length} waypoints to avoid ${usedHotspots.size} hotspots`);
       return waypoints;
     };
     
@@ -734,7 +750,7 @@ function SafeMzansiMap() {
     
     // Try each strategy
     for (const strategy of strategies) {
-      const waypoints = createAvoidanceWaypoints(hotspots, strategy.offset, strategy.direction, strategy.minSafe);
+      const waypoints = createAvoidanceWaypoints(hotspots, strategy.offset, strategy.direction, strategy.minSafe, origin);
       
       // Skip if we couldn't create safe waypoints
       if (waypoints.length === 0) {
@@ -743,21 +759,28 @@ function SafeMzansiMap() {
       }
       
       try {
-        const route = await new Promise((resolve) => {
+        const route = await new Promise((resolve, reject) => {
+          const request = {
+            origin: origin,
+            destination: dest,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            avoidHighways: strategy.avoidHighways,
+            avoidTolls: false,
+            optimizeWaypoints: false // Don't optimize - we want to follow our waypoints exactly
+          };
+          
+          // Only add waypoints if we have any (and limit to 23)
+          if (waypoints.length > 0) {
+            request.waypoints = waypoints.slice(0, 23); // Google Maps max is 25, but we use 23 to be safe
+          }
+          
           directionsService.current.route(
-            {
-              origin: origin,
-              destination: dest,
-              waypoints: waypoints.length > 0 ? waypoints : undefined,
-              travelMode: window.google.maps.TravelMode.DRIVING,
-              avoidHighways: strategy.avoidHighways,
-              avoidTolls: false,
-              optimizeWaypoints: false // Don't optimize - we want to follow our waypoints exactly
-            },
+            request,
             (result, status) => {
               if (status === window.google.maps.DirectionsStatus.OK) {
                 resolve(result);
               } else {
+                console.log(`Route calculation failed with status: ${status}`);
                 resolve(null);
               }
             }
@@ -769,11 +792,22 @@ function SafeMzansiMap() {
           const routeHotspots = checkRouteForHotspots(route);
           console.log(`Strategy (offset: ${strategy.offset}, avoidHighways: ${strategy.avoidHighways}, minSafe: ${strategy.minSafe}m) found route with ${routeHotspots.length} hotspots`);
           
-          // Only accept if it has ZERO hotspots
+          // Accept if it has ZERO hotspots (perfect)
           if (routeHotspots.length === 0) {
-            console.log('Found safe route with zero hotspots!');
+            console.log('✅ Found safe route with zero hotspots!');
             return route;
+          } 
+          // Or if it's better than what we've found so far
+          else if (routeHotspots.length < bestHotspotCount) {
+            console.log(`✅ Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
+            bestRoute = route;
+            bestHotspotCount = routeHotspots.length;
+            // Continue searching for a perfect route (zero hotspots)
+          } else {
+            console.log(`❌ Route has ${routeHotspots.length} hotspots, not better than current best (${bestHotspotCount}), trying next strategy...`);
           }
+        } else {
+          console.log(`❌ Route calculation returned null for strategy (offset: ${strategy.offset})`);
         }
       } catch (error) {
         console.error('Error calculating route with strategy:', error);
@@ -858,6 +892,10 @@ function SafeMzansiMap() {
               if (routeHotspots.length === 0) {
                 console.log('Found safe route using bounding box strategy!');
                 return route;
+              } else if (routeHotspots.length < bestHotspotCount) {
+                console.log(`Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
+                bestRoute = route;
+                bestHotspotCount = routeHotspots.length;
               }
             }
           } catch (error) {
@@ -913,6 +951,10 @@ function SafeMzansiMap() {
               if (routeHotspots.length === 0) {
                 console.log('Found safe route using last resort strategy!');
                 return route;
+              } else if (routeHotspots.length < bestHotspotCount) {
+                console.log(`Found better route with ${routeHotspots.length} hotspots (previous best: ${bestHotspotCount})`);
+                bestRoute = route;
+                bestHotspotCount = routeHotspots.length;
               }
             }
           } catch (error) {
@@ -922,7 +964,13 @@ function SafeMzansiMap() {
       }
     }
     
-    console.log('Could not find a route that avoids all hotspots');
+    // Return the best route found (even if not perfect) or null if nothing found
+    if (bestRoute) {
+      console.log(`Returning best route found with ${bestHotspotCount} hotspots (original had ${originalHotspotCount || 'unknown'})`);
+      return bestRoute;
+    }
+    
+    console.log('Could not find any route that avoids hotspots');
     return null;
   };
 
@@ -942,10 +990,21 @@ function SafeMzansiMap() {
    * Calculate route from origin to destination
    */
   const calculateRoute = async () => {
+    // If using current location but it's not available yet, get it first
+    if (useCurrentLocation && !userLocation) {
+      toast.info('Getting your current location...');
+      getUserCurrentLocation();
+      return;
+    }
+    
     const origin = getOrigin();
     
     if (!origin || !destination || !directionsService.current) {
-      toast.error('Please set your start location and destination');
+      if (useCurrentLocation) {
+        toast.error('Please wait for your location to be detected, or set a start location manually');
+      } else {
+        toast.error('Please set your start location and destination');
+      }
       return;
     }
 
@@ -1002,21 +1061,34 @@ function SafeMzansiMap() {
             // Fit bounds to unsafe route first
             map.current.fitBounds(result.routes[0].bounds);
             
-            // Try to calculate a safer route that avoids ALL hotspots
-            const safeRoute = await calculateSafeRoute(origin, destination.location, hotspots);
+            // Try to calculate a safer route that avoids ALL reports (not just hotspots along the route)
+            // Use all reports to ensure we avoid all crime hotspots in the area
+            const allReports = reports.map(r => ({
+              id: r.id,
+              lat: r.lat,
+              lng: r.lng
+            }));
+            
+            console.log(`Calculating safe route avoiding ${allReports.length} total reports...`);
+            const originalHotspotCount = hotspots.length;
+            const safeRoute = await calculateSafeRoute(origin, destination.location, allReports, originalHotspotCount);
             
             if (safeRoute) {
+              console.log('Safe route found! Checking for hotspots...');
               const safeHotspots = checkRouteForHotspots(safeRoute);
+              console.log(`Safe route has ${safeHotspots.length} hotspots (original had ${originalHotspotCount})`);
               
-              // Only show as "safe" if it has ZERO hotspots
-              if (safeHotspots.length === 0) {
+              // Show as "safe" if it has ZERO hotspots OR fewer than the original route
+              if (safeHotspots.length === 0 || safeHotspots.length < originalHotspotCount) {
+                const isPerfect = safeHotspots.length === 0;
+                console.log(`Safe route confirmed! ${isPerfect ? 'Zero hotspots!' : `${safeHotspots.length} hotspots (better than original ${originalHotspotCount})`} Displaying...`);
                 const totalDistance = safeRoute.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
                 const totalDuration = safeRoute.routes[0].legs.reduce((sum, leg) => sum + leg.duration.value, 0);
                 
                 setRouteInfo(prev => ({
                   ...prev,
                   safeRoute: safeRoute,
-                  safeHotspots: [],
+                  safeHotspots: safeHotspots,
                   safeDistance: (totalDistance / 1000).toFixed(1),
                   safeDuration: Math.floor(totalDuration / 60),
                   safeDistanceText: `${(totalDistance / 1000).toFixed(1)} km`,
@@ -1024,16 +1096,44 @@ function SafeMzansiMap() {
                 }));
                 
                 // Display safe route in green
-                safeRouteRenderer.current.setDirections(safeRoute);
+                try {
+                  safeRouteRenderer.current.setDirections(safeRoute);
+                  console.log('Safe route rendered on map');
+                } catch (error) {
+                  console.error('Error rendering safe route:', error);
+                }
                 
                 // Fit bounds to show both routes
-                const bounds = new window.google.maps.LatLngBounds();
-                result.routes[0].bounds.forEach(bound => bounds.extend(bound));
-                safeRoute.routes[0].bounds.forEach(bound => bounds.extend(bound));
-                map.current.fitBounds(bounds);
+                try {
+                  const bounds = new window.google.maps.LatLngBounds();
+                  // Extend bounds with the unsafe route
+                  if (result.routes[0].bounds) {
+                    bounds.extend(result.routes[0].bounds.getSouthWest());
+                    bounds.extend(result.routes[0].bounds.getNorthEast());
+                  }
+                  // Extend bounds with the safe route
+                  if (safeRoute.routes[0].bounds) {
+                    bounds.extend(safeRoute.routes[0].bounds.getSouthWest());
+                    bounds.extend(safeRoute.routes[0].bounds.getNorthEast());
+                  }
+                  map.current.fitBounds(bounds);
+                  console.log('Map bounds adjusted to show both routes');
+                } catch (error) {
+                  console.error('Error fitting bounds:', error);
+                  // Fallback: just fit to safe route
+                  if (safeRoute.routes[0].bounds) {
+                    map.current.fitBounds(safeRoute.routes[0].bounds);
+                  }
+                }
+                
+                if (safeHotspots.length === 0) {
+                  toast.success('Safe route found with zero hotspots!');
+                } else {
+                  toast.success(`Safer route found! (${safeHotspots.length} hotspots vs ${originalHotspotCount} in original)`);
+                }
               } else {
-                // Route still has hotspots - don't show it as "safe"
-                console.log('Alternative route still has hotspots, not showing as safe route');
+                // Route has same or more hotspots - don't show it as "safe"
+                console.log(`Alternative route has ${safeHotspots.length} hotspots (same or worse than original ${originalHotspotCount}), not showing as safe route`);
                 setRouteInfo(prev => ({
                   ...prev,
                   safeRoute: null
@@ -1041,6 +1141,11 @@ function SafeMzansiMap() {
               }
             } else {
               // Couldn't find alternative route that avoids hotspots
+              console.log('Could not find a safe route that avoids all hotspots');
+              toast.error('Unable to find a completely safe alternative route. Please exercise caution.', {
+                duration: 5000,
+                icon: '⚠️'
+              });
               setRouteInfo(prev => ({
                 ...prev,
                 safeRoute: null
@@ -1582,7 +1687,11 @@ function SafeMzansiMap() {
                         <span>{routeInfo.safeDurationText || `${routeInfo.safeDuration || 0} min`}</span>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#10B981', marginTop: '0.25rem' }}>
-                        ✓ No hotspots detected - Safe route!
+                        {routeInfo.safeHotspots && routeInfo.safeHotspots.length > 0 ? (
+                          <>✓ {routeInfo.safeHotspots.length} hotspot{routeInfo.safeHotspots.length !== 1 ? 's' : ''} (safer than original)</>
+                        ) : (
+                          <>✓ No hotspots detected - Safe route!</>
+                        )}
                       </div>
                     </div>
                   </div>
