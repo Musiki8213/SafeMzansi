@@ -16,6 +16,17 @@ dist/
 dist-ssr/
 *.local
 
+# Android build files
+client/android/.gradle/
+client/android/app/build/
+client/android/build/
+client/android/.idea/
+client/android/local.properties
+client/android/*.iml
+client/android/.DS_Store
+client/android/app/release/
+client/android/app/debug/
+
 # Environment files
 .env
 .env.local
