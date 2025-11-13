@@ -26,13 +26,17 @@ function ApiConfigModal({ onClose, onConfigured }) {
     setTestResult(null);
 
     try {
-      const testUrl = apiUrl.trim().replace(/\/$/, ''); // Remove trailing slash
-      const fullUrl = `${testUrl}/register`; // Test endpoint
+      let testUrl = apiUrl.trim().replace(/\/$/, ''); // Remove trailing slash
       
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test: true })
+      // If URL doesn't end with /api, add it
+      if (!testUrl.endsWith('/api')) {
+        testUrl = `${testUrl}/api`;
+      }
+      
+      // Test the base API endpoint
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
       });
 
       // Even if it fails, if we get a response, the server is reachable

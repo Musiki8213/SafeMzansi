@@ -158,10 +158,19 @@ const apiRequest = async (endpoint, options = {}) => {
       const currentApiUrl = localStorage.getItem('API_BASE_URL') || API_BASE_URL;
       
       if (isCapacitorInternal() && currentApiUrl.includes('localhost')) {
-        throw new Error('Mobile API Error: localhost does not work on mobile devices. Please configure API_BASE_URL in localStorage or set VITE_MOBILE_API_URL. See MOBILE_API_SETUP.md for instructions.');
+        throw new Error('Mobile API Error: localhost does not work on mobile devices. Please configure the API URL in the configuration screen.');
       }
       
-      throw new Error(`Network error: Unable to connect to server at ${currentApiUrl}. Please check if the backend is running and the API URL is correct.`);
+      // Provide helpful error message
+      const errorMsg = `Unable to connect to backend server.\n\n` +
+        `Server URL: ${currentApiUrl}\n\n` +
+        `Please check:\n` +
+        `1. Backend server is running\n` +
+        `2. API URL is correct\n` +
+        `3. Phone and computer are on same WiFi (for local testing)\n` +
+        `4. Firewall allows connections on port 5000`;
+      
+      throw new Error(errorMsg);
     }
     
     // Re-throw if it's already a formatted error

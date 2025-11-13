@@ -1,9 +1,25 @@
 import { Link, Navigate } from 'react-router-dom';
 import { Shield, Map, TrendingUp, Users, ArrowRight } from 'lucide-react';
 import { useAuth } from '../firebase/authContext';
+import { useState, useEffect } from 'react';
+import { isCapacitor, getCurrentApiUrl } from '../utils/api';
+import ApiConfigModal from '../components/ApiConfigModal';
+import toast from 'react-hot-toast';
 
 function Landing() {
   const { currentUser } = useAuth();
+  const [showApiConfig, setShowApiConfig] = useState(false);
+
+  // Check if API URL needs to be configured on mobile when app first opens
+  useEffect(() => {
+    if (isCapacitor()) {
+      const currentUrl = getCurrentApiUrl();
+      // Show config modal if URL is localhost or not configured
+      if (currentUrl.includes('localhost') || !currentUrl || currentUrl.trim() === '') {
+        setShowApiConfig(true);
+      }
+    }
+  }, []);
 
   // If user is logged in, redirect to home page
   if (currentUser) {
@@ -13,6 +29,25 @@ function Landing() {
   // Show landing page with Signup/Login buttons when not logged in
   return (
     <div className="landing-page">
+      {showApiConfig && (
+        <ApiConfigModal
+          onClose={() => {
+            // Don't allow closing if on mobile and not configured
+            if (isCapacitor()) {
+              const currentUrl = getCurrentApiUrl();
+              if (currentUrl.includes('localhost')) {
+                toast.error('Please configure the API URL to continue');
+                return;
+              }
+            }
+            setShowApiConfig(false);
+          }}
+          onConfigured={() => {
+            setShowApiConfig(false);
+            toast.success('API configured! You can now sign up or log in.');
+          }}
+        />
+      )}
       {/* Hero Section */}
       <section className="landing-hero">
         <div className="landing-container">

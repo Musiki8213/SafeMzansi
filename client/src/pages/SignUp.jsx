@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Shield, Mail, Lock, User, UserPlus } from 'lucide-react';
-import { authAPI } from '../utils/api';
+import { authAPI, getCurrentApiUrl, isCapacitor } from '../utils/api';
 import { setAuthToken, setUsername } from '../utils/api';
+import ApiConfigModal from '../components/ApiConfigModal';
 
 function SignUp() {
   const navigate = useNavigate();
@@ -12,6 +13,18 @@ function SignUp() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showApiConfig, setShowApiConfig] = useState(false);
+
+  // Check if API URL needs to be configured on mobile
+  useEffect(() => {
+    if (isCapacitor()) {
+      const currentUrl = getCurrentApiUrl();
+      // Show config modal if URL is localhost or not configured
+      if (currentUrl.includes('localhost') || !currentUrl || currentUrl.trim() === '') {
+        setShowApiConfig(true);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,6 +91,26 @@ function SignUp() {
 
   return (
     <div className="auth-page">
+      {showApiConfig && (
+        <ApiConfigModal
+          onClose={() => {
+            // Don't allow closing if on mobile and not configured
+            if (isCapacitor()) {
+              const currentUrl = getCurrentApiUrl();
+              if (currentUrl.includes('localhost')) {
+                toast.error('Please configure the API URL to continue');
+                return;
+              }
+            }
+            setShowApiConfig(false);
+          }}
+          onConfigured={() => {
+            setShowApiConfig(false);
+            toast.success('API configured! You can now create an account.');
+          }}
+        />
+      )}
+      
       <div className="glass-card">
         <div className="auth-header">
           <div className="icon-wrapper icon-wrapper-primary">
