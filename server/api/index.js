@@ -27,19 +27,28 @@ if (mongoose.connection.readyState === 0) {
     });
 }
 
-// Base API route
+// Base API route - handle root path (Vercel routes /api to this function)
+app.get('/', (req, res) => {
+  res.json({ message: 'SafeMzansi backend is running' });
+});
+
+// Also handle /api explicitly (in case Vercel doesn't strip it)
 app.get('/api', (req, res) => {
   res.json({ message: 'SafeMzansi backend is running' });
 });
 
-// Auth routes
+// Auth routes - Vercel routes /api/* to this function, so paths are relative
+// Access as: https://your-project.vercel.app/api/register
 app.use('/api', authRoutes);
+app.use('/', authRoutes); // Also handle without /api prefix
 
 // Reports routes
 app.use('/api/reports', reportsRoutes);
+app.use('/reports', reportsRoutes); // Also handle without /api prefix
 
 // Notifications routes
 app.use('/api/notifications', notificationsRoutes);
+app.use('/notifications', notificationsRoutes); // Also handle without /api prefix
 
 // Error handling middleware
 app.use((err, req, res, next) => {
