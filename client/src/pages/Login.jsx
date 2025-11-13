@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Shield, Mail, Lock, LogIn } from 'lucide-react';
-import { authAPI } from '../utils/api';
+import { authAPI, getCurrentApiUrl, isCapacitor } from '../utils/api';
 import { setAuthToken, setUsername } from '../utils/api';
 import { useAuth } from '../firebase/authContext';
+import { requestNotificationPermission, isNotificationSupported } from '../utils/notifications';
+import ApiConfigModal from '../components/ApiConfigModal';
 
 function Login() {
   const { updateUser } = useAuth();
@@ -12,6 +14,18 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showApiConfig, setShowApiConfig] = useState(false);
+
+  // Check if API URL needs to be configured on mobile
+  useEffect(() => {
+    if (isCapacitor()) {
+      const currentUrl = getCurrentApiUrl();
+      // Show config modal if URL is localhost or not configured
+      if (currentUrl.includes('localhost') || !currentUrl || currentUrl.trim() === '') {
+        setShowApiConfig(true);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,6 +55,15 @@ function Login() {
         // Update auth context
         updateUser(response.user.username, response.token);
         
+        // Request notification permission for real-time alerts
+        if (isNotificationSupported()) {
+          requestNotificationPermission().then(permitted => {
+            if (permitted) {
+              console.log('Notification permission granted');
+            }
+          });
+        }
+        
         toast.success('Signed in successfully!');
         navigate('/');
       } else {
@@ -58,6 +81,26 @@ function Login() {
 
   return (
     <div className="auth-page">
+      {showApiConfig && (
+        <ApiConfigModal
+          onClose={() => {
+            // Don't allow closing if on mobile and not configured
+            if (isCapacitor()) {
+              const currentUrl = getCurrentApiUrl();
+              if (currentUrl.includes('localhost')) {
+                toast.error('Please configure the API URL to continue');
+                return;
+              }
+            }
+            setShowApiConfig(false);
+          }}
+          onConfigured={() => {
+            setShowApiConfig(false);
+            toast.success('API configured! You can now log in.');
+          }}
+        />
+      )}
+      
       <div className="glass-card">
         <div className="auth-header">
           <div className="icon-wrapper icon-wrapper-primary">

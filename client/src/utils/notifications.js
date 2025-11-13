@@ -49,10 +49,16 @@ export const showNotification = (title, options = {}) => {
       notification.close();
     }, 5000);
 
-    // Handle click to focus window
-    notification.onclick = () => {
+    // Handle click to focus window and navigate to notifications
+    notification.onclick = (event) => {
+      event.preventDefault();
       window.focus();
       notification.close();
+      
+      // Navigate to notifications page if available
+      if (window.location.pathname !== '/notifications') {
+        window.location.href = '/notifications';
+      }
     };
 
     return notification;

@@ -1,9 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../firebase/authContext';
-import { reportsAPI } from '../utils/api';
+import { reportsAPI, getAuthToken } from '../utils/api';
 import { requestNotificationPermission, notifyNewReport, isNotificationSupported } from '../utils/notifications';
 import toast from 'react-hot-toast';
 import { Bell, MapPin, Clock, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+
+// Helper function to decode JWT token and get user ID
+const getUserIdFromToken = () => {
+  try {
+    const token = getAuthToken();
+    if (!token) return null;
+    
+    // Decode JWT token (base64 decode the payload)
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    
+    const decoded = JSON.parse(jsonPayload);
+    return decoded.id || null;
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
+  }
+};
 
 function Alerts() {
   const { currentUser } = useAuth();
@@ -34,8 +55,11 @@ function Alerts() {
         // Handle different response formats
         const reportsData = response.reports || response.data || response || [];
         
-        // Sort by createdAt (newest first) - backend already does this, but ensure it
-        const sortedReports = reportsData
+        // Get current user's ID to filter out their own reports
+        const currentUserId = getUserIdFromToken();
+        
+        // Filter and map reports
+        let filteredReports = reportsData
           .map(report => ({
             id: report.id || report._id,
             type: report.type || 'Crime',
@@ -44,14 +68,31 @@ function Alerts() {
             timestamp: report.createdAt || report.timestamp || new Date().toISOString(),
             verified: report.verified || false,
             title: report.title,
-            username: report.username || 'Anonymous'
+            username: report.username || 'Anonymous',
+            userId: report.userId || null,
+            lat: report.lat,
+            lng: report.lng
           }))
-          .sort((a, b) => {
-            // Sort by timestamp, newest first
-            const dateA = new Date(a.timestamp).getTime();
-            const dateB = new Date(b.timestamp).getTime();
-            return dateB - dateA;
+          // Filter out current user's own reports
+          .filter(report => {
+            if (currentUserId && report.userId) {
+              return report.userId !== currentUserId;
+            }
+            // If no userId match, keep it (might be anonymous or old reports)
+            // But also filter by username as fallback
+            if (currentUser && currentUser.username && report.username) {
+              return report.username !== currentUser.username;
+            }
+            return true; // Keep if we can't determine ownership
           });
+        
+        // Sort by createdAt (newest first)
+        const sortedReports = filteredReports.sort((a, b) => {
+          // Sort by timestamp, newest first
+          const dateA = new Date(a.timestamp).getTime();
+          const dateB = new Date(b.timestamp).getTime();
+          return dateB - dateA;
+        });
         
         // Check for new alerts (not in our last seen set)
         if (!isInitial && lastAlertIdsRef.current.size > 0) {
@@ -120,7 +161,7 @@ function Alerts() {
     } else {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser]); // Re-fetch when user changes
 
   if (!currentUser) {
     return (
@@ -145,7 +186,9 @@ function Alerts() {
         </div>
         <div>
           <h1>Safety Alerts</h1>
-          <p className="text-gray-600">Nearby verified incidents</p>
+          <p className="text-gray-600">
+            All incidents from other users
+          </p>
         </div>
       </div>
 
@@ -161,7 +204,7 @@ function Alerts() {
           <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10B981' }} />
           <h3 className="mb-2">All Clear!</h3>
           <p className="text-gray-600">
-            No recent alerts. Stay safe!
+            No recent alerts from other users. Stay safe!
           </p>
         </div>
       ) : (

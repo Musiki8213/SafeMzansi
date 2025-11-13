@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getAuthToken, setAuthToken, getUsername, setUsername, clearAuthData } from '../utils/api';
+import { requestNotificationPermission, isNotificationSupported } from '../utils/notifications';
 
 const AuthContext = createContext();
 
@@ -34,6 +35,15 @@ export function AuthProvider({ children }) {
       username,
       token,
     });
+    
+    // Request notification permission when user logs in
+    if (isNotificationSupported()) {
+      requestNotificationPermission().then(permitted => {
+        if (permitted) {
+          console.log('Notification permission granted for real-time alerts');
+        }
+      });
+    }
   };
 
   const value = {

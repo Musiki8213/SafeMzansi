@@ -3,7 +3,7 @@ import { useAuth } from '../firebase/authContext';
 import { useNavigate } from 'react-router-dom';
 import { reportsAPI } from '../utils/api';
 import toast from 'react-hot-toast';
-import { User, LogOut, Shield, Mail, Calendar, Loader, MapPin, Clock, CheckCircle } from 'lucide-react';
+import { User, LogOut, Shield, Mail, Calendar, Loader, MapPin, Clock, CheckCircle, Trash2 } from 'lucide-react';
 
 function Profile() {
   const { currentUser, logout, userCredibility } = useAuth();
@@ -82,6 +82,24 @@ function Profile() {
       navigate('/', { replace: true });
     } catch (error) {
       toast.error(error.message || 'Failed to sign out');
+    }
+  };
+
+  const handleDeleteReport = async (reportId) => {
+    // Confirm deletion
+    if (!window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await reportsAPI.deleteReport(reportId);
+      toast.success('Report deleted successfully');
+      
+      // Remove from local state
+      setMyReports(prevReports => prevReports.filter(report => report.id !== reportId));
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast.error(error.message || 'Failed to delete report');
     }
   };
 
@@ -170,6 +188,20 @@ function Profile() {
                         </span>
                       )}
                     </div>
+                    <button
+                      onClick={() => handleDeleteReport(report.id)}
+                      className="btn btn-danger btn-sm"
+                      style={{ 
+                        padding: '0.5rem', 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}
+                      title="Delete this report"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                   <h3 className="mb-2">{report.title}</h3>
                   <p className="text-gray-600 mb-3">{report.description}</p>
