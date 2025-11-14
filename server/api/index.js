@@ -27,28 +27,20 @@ if (mongoose.connection.readyState === 0) {
     });
 }
 
-// Base API route - handle root path (Vercel routes /api to this function)
+// Base API route - Vercel strips /api, so /api becomes /
 app.get('/', (req, res) => {
   res.json({ message: 'SafeMzansi backend is running' });
 });
 
-// Also handle /api explicitly (in case Vercel doesn't strip it)
-app.get('/api', (req, res) => {
-  res.json({ message: 'SafeMzansi backend is running' });
-});
-
-// Auth routes - Vercel routes /api/* to this function, so paths are relative
+// Auth routes - Vercel strips /api prefix, so /api/register becomes /register
 // Access as: https://your-project.vercel.app/api/register
-app.use('/api', authRoutes);
-app.use('/', authRoutes); // Also handle without /api prefix
+app.use('/', authRoutes);
 
-// Reports routes
-app.use('/api/reports', reportsRoutes);
-app.use('/reports', reportsRoutes); // Also handle without /api prefix
+// Reports routes - /api/reports becomes /reports
+app.use('/reports', reportsRoutes);
 
-// Notifications routes
-app.use('/api/notifications', notificationsRoutes);
-app.use('/notifications', notificationsRoutes); // Also handle without /api prefix
+// Notifications routes - /api/notifications becomes /notifications
+app.use('/notifications', notificationsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -63,5 +55,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// Export as Vercel serverless function
+// Export as Vercel serverless function handler
+// Vercel automatically routes /api/* to this function
+// The /api prefix is stripped, so /api/register becomes /register
 export default app;
