@@ -29,26 +29,11 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_MOBILE_API_URL;
   }
   
-  // If running on mobile (Capacitor), we need a configured URL
+  // If running on mobile (Capacitor), use production backend by default
   if (isCapacitorInternal()) {
-    // Try common development IPs (user can override via localStorage)
-    // These are common local network IPs - user should update to their actual IP
-    const commonDevIPs = [
-      '192.168.1.100',
-      '192.168.0.100', 
-      '10.0.2.2' // Android emulator localhost
-    ];
-    
-    // For now, return a URL that will show a clear error
-    // User must configure via environment variable or localStorage
-    console.error('⚠️ MOBILE API URL NOT CONFIGURED!');
-    console.error('Please do one of the following:');
-    console.error('1. Set VITE_MOBILE_API_URL in .env file');
-    console.error('2. Or set API_BASE_URL in localStorage');
-    console.error('Example: localStorage.setItem("API_BASE_URL", "http://YOUR_IP:5000/api")');
-    
-    // Return a URL that will fail with a clear error
-    return 'http://localhost:5000/api'; // Will fail on mobile, but error will be clear
+    // Default to production backend for mobile
+    // Users can override via localStorage if they need local development
+    return 'https://safe-mzansi-68eb.vercel.app/api';
   }
   
   // For web/desktop, use localhost for development
@@ -161,14 +146,26 @@ const apiRequest = async (endpoint, options = {}) => {
         throw new Error('Mobile API Error: localhost does not work on mobile devices. Please configure the API URL in the configuration screen.');
       }
       
-      // Provide helpful error message
-      const errorMsg = `Unable to connect to backend server.\n\n` +
-        `Server URL: ${currentApiUrl}\n\n` +
-        `Please check:\n` +
-        `1. Backend server is running\n` +
-        `2. API URL is correct\n` +
-        `3. Phone and computer are on same WiFi (for local testing)\n` +
-        `4. Firewall allows connections on port 5000`;
+      // Provide helpful error message based on URL type
+      let errorMsg;
+      if (currentApiUrl.startsWith('https://')) {
+        // Production URL error
+        errorMsg = `Unable to connect to backend server.\n\n` +
+          `Server URL: ${currentApiUrl}\n\n` +
+          `Please check:\n` +
+          `1. You have an active internet connection\n` +
+          `2. The backend server is accessible\n` +
+          `3. Try again in a moment (server may be temporarily unavailable)`;
+      } else {
+        // Local development URL error
+        errorMsg = `Unable to connect to backend server.\n\n` +
+          `Server URL: ${currentApiUrl}\n\n` +
+          `Please check:\n` +
+          `1. Backend server is running\n` +
+          `2. API URL is correct\n` +
+          `3. Phone and computer are on same WiFi (for local testing)\n` +
+          `4. Firewall allows connections on port 5000`;
+      }
       
       throw new Error(errorMsg);
     }

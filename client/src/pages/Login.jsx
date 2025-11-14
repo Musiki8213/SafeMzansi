@@ -70,7 +70,14 @@ function Login() {
         throw new Error('Invalid response from server: Missing token or user data');
       }
     } catch (error) {
-      // Show specific error messages
+      // Check if this is the mobile API configuration error
+      if (error.message && error.message.includes('Mobile API Error')) {
+        // Show the API config modal instead of toast
+        setShowApiConfig(true);
+        return;
+      }
+      
+      // Show specific error messages for other errors
       const errorMessage = error.message || 'Failed to sign in. Please check your credentials.';
       toast.error(errorMessage);
       console.error('Login error:', error);
